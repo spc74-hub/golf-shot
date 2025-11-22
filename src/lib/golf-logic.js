@@ -46,15 +46,19 @@ export function getStrokesReceivedForHole(playingHandicap, holeHandicap) {
     return strokes;
 }
 
-export function calculateSindicatoPoints(playerScores, playerCount) {
+export function calculateSindicatoPoints(playerScores, playerCount, customDistribution = null) {
     // playerScores: Array of { playerId, netScore }
+    // customDistribution: Array of points per position [1st, 2nd, 3rd, ...]
     // Returns: Map { playerId: points }
 
-    // Define distribution based on player count
-    let distribution = [];
-    if (playerCount === 3) distribution = [5, 3, 1];
-    else if (playerCount === 4) distribution = [6, 4, 2, 0];
-    else return {}; // Unsupported count for now
+    // Use custom distribution or default
+    let distribution = customDistribution;
+    if (!distribution) {
+        if (playerCount === 2) distribution = [2, 0];
+        else if (playerCount === 3) distribution = [4, 2, 1];
+        else if (playerCount === 4) distribution = [4, 2, 1, 0];
+        else distribution = Array(playerCount).fill(0).map((_, i) => Math.max(0, playerCount - i - 1));
+    }
 
     // Sort players by net score (ascending, lower is better)
     const sortedPlayers = [...playerScores].sort((a, b) => a.netScore - b.netScore);
@@ -89,4 +93,92 @@ export function calculateSindicatoPoints(playerScores, playerCount) {
     }
 
     return results;
+}
+
+export function calculateTeamPoints(playersData, teamMode, pointsConfig) {
+    // playersData: Array of { playerId, netScore, team }
+    // teamMode: 'bestBall' or 'goodBadBall'
+    // pointsConfig: { bestBallPoints, worstBallPoints } (only for goodBadBall)
+    // Returns: { teamA: points, teamB: points, status: 'A/S' | '1UP' | '2UP' etc, winner: 'A' | 'B' | null }
+
+    if (playersData.length === 0) return { teamA: 0, teamB: 0, status: '-', winner: null };
+
+    // Group players by team
+    const teamA = playersData.filter(p => p.team === 'A');
+    const teamB = playersData.filter(p => p.team === 'B');
+
+    if (teamA.length === 0 || teamB.length === 0) {
+        return { teamA: 0, teamB: 0, status: '-', winner: null };
+    }
+
+    // Sort each team by net score (ascending, lower is better)
+    const teamASorted = [...teamA].sort((a, b) => a.netScore - b.netScore);
+    const teamBSorted = [...teamB].sort((a, b) => a.netScore - b.netScore);
+
+    if (teamMode === 'bestBall') {
+        // Winner gets 1 point
+        const bestA = teamASorted[0].netScore;
+        const bestB = teamBSorted[0].netScore;
+
+        if (bestA < bestB) {
+            return { teamA: 1, teamB: 0, status: '1UP', winner: 'A' };
+        } else if (bestB < bestA) {
+            return { teamA: 0, teamB: 1, status: '1UP', winner: 'B' };
+        } else {
+            // Tie - All Square
+            return { teamA: 0.5, teamB: 0.5, status: 'A/S', winner: null };
+        }
+    } else if (teamMode === 'goodBadBall') {
+        // Distribute points for best ball and worst ball
+        const { bestBallPoints = 2, worstBallPoints = 1 } = pointsConfig;
+        let teamAPoints = 0;
+        let teamBPoints = 0;
+
+        // Best ball comparison
+        const bestA = teamASorted[0].netScore;
+        const bestB = teamBSorted[0].netScore;
+
+        if (bestA < bestB) {
+            teamAPoints += bestBallPoints;
+        } else if (bestB < bestA) {
+            teamBPoints += bestBallPoints;
+        } else {
+            // Tie - split points
+            teamAPoints += bestBallPoints / 2;
+            teamBPoints += bestBallPoints / 2;
+        }
+
+        // Worst ball comparison (last player in sorted array)
+        const worstA = teamASorted[teamASorted.length - 1].netScore;
+        const worstB = teamBSorted[teamBSorted.length - 1].netScore;
+
+        if (worstA < worstB) {
+            teamAPoints += worstBallPoints;
+        } else if (worstB < worstA) {
+            teamBPoints += worstBallPoints;
+        } else {
+            // Tie - split points
+            teamAPoints += worstBallPoints / 2;
+            teamBPoints += worstBallPoints / 2;
+        }
+
+        // Determine status
+        let status, winner;
+        if (teamAPoints === teamBPoints) {
+            status = 'A/S';
+            winner = null;
+        } else if (teamAPoints > teamBPoints) {
+            const diff = teamAPoints - teamBPoints;
+            status = `${diff}UP`;
+            winner = 'A';
+        } else {
+            const diff = teamBPoints - teamAPoints;
+            status = `${diff}UP`;
+            winner = 'B';
+        }
+
+        return { teamA: teamAPoints, teamB: teamBPoints, status, winner };
+    }
+
+    return { teamA: 0, teamB: 0, status: '-', winner: null };
 }

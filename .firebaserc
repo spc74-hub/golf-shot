@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "focus-tracker-66ac4"
+  },
+  "targets": {
+    "focus-tracker-66ac4": {
+      "hosting": {
+        "golfshot": [
+          "golfshot"
+        ]
+      }
+    }
+  }
+}

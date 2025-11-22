@@ -17,18 +17,33 @@ export default function CardView() {
     }
 
     return (
-        <div style={{ paddingBottom: '80px' }}>
-            <div className="mb-6 flex justify-between items-center">
-                <h1 className="text-xl">{currentRound.courseName}</h1>
-                <Link href="/round/play" className="btn btn-secondary" style={{ width: 'auto' }}>
-                    Volver al Juego
-                </Link>
-            </div>
-
-            <div className="mb-4">
+        <div style={{ paddingBottom: '80px', width: '100%' }}>
+            <div className="mb-4" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <h1 className="text-xl">{currentRound.courseName}</h1>
+                    <Link href="/round/play" className="btn btn-secondary" style={{ width: 'auto', padding: '8px 16px', fontSize: '0.9rem' }}>
+                        Volver al Juego
+                    </Link>
+                </div>
                 <p className="text-sm text-gray-500">
                     {new Date(currentRound.date).toLocaleDateString()} • {currentRound.players.length} Jugadores
                 </p>
+            </div>
+
+            <div style={{
+                marginBottom: '12px',
+                padding: '8px 12px',
+                background: '#e3f2fd',
+                borderRadius: '8px',
+                fontSize: '0.85rem',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+            }}>
+                <span style={{ fontSize: '1.2rem' }}>👉</span>
+                <span>Desliza horizontalmente para ver toda la tarjeta</span>
             </div>
 
             <ScorecardTable round={currentRound} />

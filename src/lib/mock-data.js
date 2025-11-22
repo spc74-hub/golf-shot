@@ -47,5 +47,38 @@ export const MOCK_COURSES = [
             handicap: i + 1,
             distance: 300 + (i * 10)
         }))
+    },
+    {
+        id: 'c3',
+        name: 'Las Lomas Bosque',
+        holes: 18,
+        par: 72,
+        tees: [
+            { name: 'Negras', slope: 135, rating: 73.2 },
+            { name: 'Blancas', slope: 132, rating: 71.5 },
+            { name: 'Amarillas', slope: 128, rating: 69.8 },
+            { name: 'Azules', slope: 126, rating: 72.0 }, // Damas Pro
+            { name: 'Rojas', slope: 123, rating: 69.5 }   // Damas
+        ],
+        data: [
+            { number: 1, par: 5, handicap: 1, distance: 480 },
+            { number: 2, par: 3, handicap: 18, distance: 82 },
+            { number: 3, par: 4, handicap: 3, distance: 395 },
+            { number: 4, par: 4, handicap: 6, distance: 370 },
+            { number: 5, par: 3, handicap: 13, distance: 157 },
+            { number: 6, par: 4, handicap: 9, distance: 345 },
+            { number: 7, par: 5, handicap: 12, distance: 454 },
+            { number: 8, par: 4, handicap: 14, distance: 286 },
+            { number: 9, par: 4, handicap: 16, distance: 301 },
+            { number: 10, par: 4, handicap: 2, distance: 386 },
+            { number: 11, par: 4, handicap: 5, distance: 390 },
+            { number: 12, par: 4, handicap: 7, distance: 395 },
+            { number: 13, par: 4, handicap: 8, distance: 382 },
+            { number: 14, par: 3, handicap: 17, distance: 165 },
+            { number: 15, par: 4, handicap: 4, distance: 401 },
+            { number: 16, par: 5, handicap: 10, distance: 527 },
+            { number: 17, par: 3, handicap: 15, distance: 169 },
+            { number: 18, par: 5, handicap: 11, distance: 456 },
+        ]
     }
 ];

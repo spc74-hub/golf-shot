@@ -3,12 +3,13 @@
 import { useGame } from '@/lib/store';
 import ScorecardTable from '@/components/ScorecardTable';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function HistoryDetail() {
+function HistoryDetailContent() {
     const { history } = useGame();
-    const params = useParams();
-    const roundId = params.id;
+    const searchParams = useSearchParams();
+    const roundId = searchParams.get('id');
 
     const round = history.find(r => r.id === roundId);
 
@@ -38,5 +39,13 @@ export default function HistoryDetail() {
 
             <ScorecardTable round={round} />
         </div>
+    );
+}
+
+export default function HistoryDetail() {
+    return (
+        <Suspense fallback={<div className="text-center mt-8">Cargando...</div>}>
+            <HistoryDetailContent />
+        </Suspense>
     );
 }

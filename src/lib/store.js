@@ -51,36 +51,58 @@ export function GameProvider({ children }) {
     }, [history]);
 
     const startRound = (course, players, settings = {}) => {
-        const { gameMode = 'stableford', handicapPercentage = 100 } = settings;
+        const { gameMode = 'stableford', useHandicap = true, handicapPercentage = 100, roundDate, courseLength = '18' } = settings;
+
+        // Filter holes based on course length selection
+        let selectedHoles = course.data;
+        let adjustedPar = course.par;
+
+        if (courseLength === 'front9') {
+            selectedHoles = course.data.slice(0, 9);
+            adjustedPar = selectedHoles.reduce((sum, hole) => sum + hole.par, 0);
+        } else if (courseLength === 'back9') {
+            selectedHoles = course.data.slice(9, 18);
+            adjustedPar = selectedHoles.reduce((sum, hole) => sum + hole.par, 0);
+        }
 
         const playersWithHandicap = players.map(p => {
             // Calculate playing handicap for each player
-            // Formula: (HcpIndex * (Slope/113)) + (Rating - Par)
-            let playingHandicap = Math.round(
-                (p.handicapIndex * (p.teeBox.slope / 113)) + (p.teeBox.rating - course.par)
-            );
+            let playingHandicap = 0;
 
-            // Apply handicap percentage for Sindicato
-            if (gameMode === 'sindicato' && handicapPercentage !== 100) {
-                playingHandicap = Math.round(playingHandicap * (handicapPercentage / 100));
+            if (useHandicap) {
+                // Formula: (HcpIndex * (Slope/113)) + (Rating - Par)
+                playingHandicap = Math.round(
+                    (p.handicapIndex * (p.teeBox.slope / 113)) + (p.teeBox.rating - course.par)
+                );
+
+                // Apply handicap percentage
+                if (handicapPercentage !== 100) {
+                    playingHandicap = Math.round(playingHandicap * (handicapPercentage / 100));
+                }
             }
+
+            // Pre-llenar scores con valores por defecto solo para los hoyos seleccionados
+            const scores = {};
+            selectedHoles.forEach(hole => {
+                scores[hole.number] = { strokes: hole.par, putts: 2 };
+            });
 
             return {
                 ...p,
                 playingHandicap,
-                scores: {} // { holeNumber: { strokes: 0, putts: 0 } }
+                scores
             };
         });
 
         const newRound = {
             id: Date.now().toString(),
-            date: new Date().toISOString(),
+            date: roundDate || new Date().toISOString().split('T')[0],
             courseId: course.id,
             courseName: course.name,
-            coursePar: course.par,
-            holes: course.data,
+            coursePar: adjustedPar,
+            holes: selectedHoles,
             players: playersWithHandicap,
-            settings: { gameMode, handicapPercentage },
+            settings: settings, // Guardar todos los settings (incluye courseLength)
             completedHoles: [], // Array of hole numbers that are finished
             isFinished: false,
         };
@@ -125,14 +147,28 @@ export function GameProvider({ children }) {
         });
     };
 
+    const reopenHole = (holeNumber) => {
+        setCurrentRound(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                completedHoles: prev.completedHoles.filter(h => h !== holeNumber)
+            };
+        });
+    };
+
     const finishRound = () => {
         if (!currentRound) return;
         setHistory(prev => [currentRound, ...prev]);
         setCurrentRound(null);
     };
 
+    const abandonRound = () => {
+        setCurrentRound(null);
+    };
+
     return (
-        <GameContext.Provider value={{ currentRound, startRound, updateScore, finishRound, confirmHole, history }}>
+        <GameContext.Provider value={{ currentRound, startRound, updateScore, finishRound, confirmHole, reopenHole, abandonRound, history }}>
             {children}
         </GameContext.Provider>
     );

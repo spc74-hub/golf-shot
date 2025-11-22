@@ -8,7 +8,7 @@ import { getStrokesReceivedForHole, calculateStablefordPoints } from '@/lib/golf
 
 export default function PlayRound() {
     const router = useRouter();
-    const { currentRound, updateScore, finishRound, confirmHole } = useGame();
+    const { currentRound, updateScore, finishRound, confirmHole, reopenHole } = useGame();
     const [currentHoleIndex, setCurrentHoleIndex] = useState(0);
     const [activePlayerId, setActivePlayerId] = useState(null);
 
@@ -27,6 +27,7 @@ export default function PlayRound() {
     const currentScore = activePlayer.scores[currentHole.number] || { strokes: currentHole.par, putts: 2 };
     const isHoleCompleted = currentRound.completedHoles?.includes(currentHole.number);
 
+    
     // Calculate Stableford Data
     const strokesReceived = getStrokesReceivedForHole(activePlayer.playingHandicap, currentHole.handicap);
     const stablefordPoints = calculateStablefordPoints(currentScore.strokes, currentHole.par, strokesReceived);
@@ -39,6 +40,7 @@ export default function PlayRound() {
 
         if (currentHoleIndex < currentRound.holes.length - 1) {
             setCurrentHoleIndex(prev => prev + 1);
+            setActivePlayerId(currentRound.players[0].id); // Volver al primer jugador
         } else {
             if (confirm('¿Terminar la ronda?')) {
                 finishRound();
@@ -50,20 +52,18 @@ export default function PlayRound() {
     const handlePrevHole = () => {
         if (currentHoleIndex > 0) {
             setCurrentHoleIndex(prev => prev - 1);
+            setActivePlayerId(currentRound.players[0].id); // Volver al primer jugador
         }
     };
 
+    
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Header Info */}
             <div className="mb-4 card" style={{ padding: '12px', background: 'var(--primary)', color: 'white' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <button
-                        onClick={() => {
-                            if (confirm('¿Salir al inicio? La ronda actual se guardará.')) {
-                                router.push('/');
-                            }
-                        }}
+                        onClick={() => router.push('/')}
                         style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', cursor: 'pointer' }}
                     >
                         ← Inicio
@@ -91,26 +91,32 @@ export default function PlayRound() {
                 </div>
             </div>
 
-            {/* Player Tabs */}
-            <div className="mb-4 pb-2" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
-                {currentRound.players.map(p => (
-                    <button
-                        key={p.id}
-                        onClick={() => setActivePlayerId(p.id)}
-                        className={`btn ${activePlayerId === p.id ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{
-                            padding: '10px 20px',
-                            fontSize: '0.9rem',
-                            whiteSpace: 'nowrap',
-                            flex: '0 0 auto', // Prevent shrinking
-                            minWidth: '100px',
-                            border: activePlayerId === p.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                            boxShadow: activePlayerId === p.id ? '0 2px 4px rgba(0,0,0,0.2)' : 'none'
-                        }}
-                    >
-                        {p.name}
-                    </button>
-                ))}
+            {/* Player Selector */}
+            <div className="mb-4">
+                <select
+                    value={activePlayerId}
+                    onChange={(e) => setActivePlayerId(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '14px 16px',
+                        fontSize: '1.1rem',
+                        fontWeight: 'bold',
+                        borderRadius: '8px',
+                        border: '2px solid var(--primary)',
+                        background: 'var(--primary)',
+                        color: 'white',
+                        cursor: 'pointer',
+                        appearance: 'none',
+                        textAlign: 'center'
+                    }}
+                >
+                    {currentRound.players.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+                <div style={{ textAlign: 'center', marginTop: '4px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    ↑ Toca para cambiar de jugador
+                </div>
             </div>
 
             {/* Input Area */}
@@ -149,18 +155,26 @@ export default function PlayRound() {
                 />
 
                 <div className="mt-6 text-center">
-                    <button
-                        onClick={() => confirmHole(currentHole.number)}
-                        className={`btn ${isHoleCompleted ? 'btn-secondary' : 'btn-primary'}`}
-                        style={{
-                            background: isHoleCompleted ? '#4caf50' : undefined,
-                            color: isHoleCompleted ? 'white' : undefined,
-                            borderColor: isHoleCompleted ? '#4caf50' : undefined
-                        }}
-                        disabled={isHoleCompleted}
-                    >
-                        {isHoleCompleted ? 'Hoyo Completado ✓' : 'Confirmar Hoyo'}
-                    </button>
+                    {isHoleCompleted ? (
+                        <button
+                            onClick={() => reopenHole(currentHole.number)}
+                            className="btn btn-secondary"
+                            style={{
+                                background: '#ff9800',
+                                color: 'white',
+                                borderColor: '#ff9800'
+                            }}
+                        >
+                            Editar Hoyo
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => confirmHole(currentHole.number)}
+                            className="btn btn-primary"
+                        >
+                            Confirmar Hoyo
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -12,41 +12,41 @@ export default function RoundSetup() {
     const [step, setStep] = useState(1);
     const [selectedCourse, setSelectedCourse] = useState(null);
     const [gameMode, setGameMode] = useState('stableford');
+    const [useHandicap, setUseHandicap] = useState(true);
     const [handicapPercentage, setHandicapPercentage] = useState(100);
+    const [sindicatoPoints, setSindicatoPoints] = useState([4, 2, 1, 0]); // Puntos por posición (1º, 2º, 3º, 4º)
+    const [teamMode, setTeamMode] = useState('bestBall'); // 'bestBall' o 'goodBadBall'
+    const [bestBallPoints, setBestBallPoints] = useState(2);
+    const [worstBallPoints, setWorstBallPoints] = useState(1);
+    const [roundDate, setRoundDate] = useState(new Date().toISOString().split('T')[0]); // Fecha de la partida
+    const [courseLength, setCourseLength] = useState('18'); // '18', 'front9', 'back9'
     const [players, setPlayers] = useState([
-        { id: 'p1', name: 'Jugador 1', handicapIndex: 18.0, teeBox: null }
+        { id: 'p1', name: 'Jugador 1', handicapIndex: 18.0, teeBox: null, team: 'A' }
     ]);
 
+    // Si ya hay partida activa, redirigir al juego
     useEffect(() => {
         if (currentRound && currentRound.players && currentRound.players.length > 0) {
-            // Pre-fill players from current round to prevent data loss on navigation
-            setPlayers(currentRound.players.map(p => ({
-                id: p.id,
-                name: p.name,
-                handicapIndex: p.handicapIndex || 18.0,
-                teeBox: p.teeBox
-            })));
-
-            // Also try to restore course if possible, though step 1 handles selection
-            if (currentRound.course) {
-                setSelectedCourse(currentRound.course);
-                setStep(2); // Skip to player setup if course is known
-            }
+            router.push('/round/play');
         }
-    }, [currentRound]);
+    }, [currentRound, router]);
 
     const handleCourseSelect = (course) => {
         setSelectedCourse(course);
-        // Set default tee box for first player
-        const defaultTee = course.tees.find(t => t.name === 'Amarillas') || course.tees[0];
-        setPlayers(prev => prev.map(p => ({ ...p, teeBox: defaultTee })));
+        // Set default tee box for first player - Blancas for Las Lomas, Amarillas for others
+        const defaultTeeName = course.name === 'Las Lomas Bosque' ? 'Blancas' : 'Amarillas';
+        const defaultTee = course.tees.find(t => t.name === defaultTeeName) || course.tees[0];
+        setPlayers(prev => prev.map(p => ({ ...p, teeBox: defaultTee, team: p.team || 'A' })));
         setStep(2);
     };
 
     const addPlayer = () => {
         const newId = `p${players.length + 1}`;
-        const defaultTee = selectedCourse.tees.find(t => t.name === 'Amarillas') || selectedCourse.tees[0];
-        setPlayers([...players, { id: newId, name: `Jugador ${players.length + 1}`, handicapIndex: 24.0, teeBox: defaultTee }]);
+        const defaultTeeName = selectedCourse.name === 'Las Lomas Bosque' ? 'Blancas' : 'Amarillas';
+        const defaultTee = selectedCourse.tees.find(t => t.name === defaultTeeName) || selectedCourse.tees[0];
+        // Alternate team assignment by default
+        const defaultTeam = players.length % 2 === 0 ? 'A' : 'B';
+        setPlayers([...players, { id: newId, name: `Jugador ${players.length + 1}`, handicapIndex: 24.0, teeBox: defaultTee, team: defaultTeam }]);
     };
 
     const updatePlayer = (id, field, value) => {
@@ -54,7 +54,16 @@ export default function RoundSetup() {
     };
 
     const handleStart = () => {
-        startRound(selectedCourse, players, { gameMode, handicapPercentage });
+        const settings = { gameMode, useHandicap, handicapPercentage, roundDate, courseLength };
+        if (gameMode === 'sindicato') {
+            settings.sindicatoPoints = sindicatoPoints.slice(0, players.length);
+        }
+        if (gameMode === 'team') {
+            settings.teamMode = teamMode;
+            settings.bestBallPoints = bestBallPoints;
+            settings.worstBallPoints = worstBallPoints;
+        }
+        startRound(selectedCourse, players, settings);
         router.push('/round/play');
     };
 
@@ -83,6 +92,52 @@ export default function RoundSetup() {
 
             <h1 className="mb-6">Configuración</h1>
 
+            {/* Date Selection */}
+            <div className="card mb-6">
+                <label className="text-sm text-secondary mb-2 block">Fecha de la Partida</label>
+                <input
+                    type="date"
+                    value={roundDate}
+                    onChange={(e) => setRoundDate(e.target.value)}
+                    style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        background: '#333',
+                        color: 'white'
+                    }}
+                />
+            </div>
+
+            {/* Course Length Selection */}
+            <div className="card mb-6">
+                <label className="text-sm text-secondary mb-2 block">Recorrido</label>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button
+                        className={`btn ${courseLength === '18' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setCourseLength('18')}
+                        style={{ flex: 1 }}
+                    >
+                        18 Hoyos
+                    </button>
+                    <button
+                        className={`btn ${courseLength === 'front9' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setCourseLength('front9')}
+                        style={{ flex: 1 }}
+                    >
+                        Front 9
+                    </button>
+                    <button
+                        className={`btn ${courseLength === 'back9' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setCourseLength('back9')}
+                        style={{ flex: 1 }}
+                    >
+                        Back 9
+                    </button>
+                </div>
+            </div>
+
             {/* Game Mode Selection */}
             <div className="card mb-6">
                 <h3 className="text-lg mb-4">Modalidad de Juego</h3>
@@ -95,10 +150,33 @@ export default function RoundSetup() {
                         <option value="stableford">Stableford</option>
                         <option value="stroke">Stroke Play (Medal)</option>
                         <option value="sindicato">Sindicato (Puntos)</option>
+                        <option value="team">Equipos</option>
                     </select>
                 </div>
 
-                {gameMode === 'sindicato' && (
+                {/* Handicap toggle */}
+                <div className="mb-4">
+                    <label className="text-sm text-secondary mb-2 block">Handicap</label>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <button
+                            className={`btn ${useHandicap ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setUseHandicap(true)}
+                            style={{ flex: 1 }}
+                        >
+                            Con Handicap
+                        </button>
+                        <button
+                            className={`btn ${!useHandicap ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setUseHandicap(false)}
+                            style={{ flex: 1 }}
+                        >
+                            Sin Handicap
+                        </button>
+                    </div>
+                </div>
+
+                {/* Handicap percentage (only if useHandicap) */}
+                {useHandicap && (
                     <div>
                         <label className="text-sm text-secondary mb-2 block">Porcentaje de Handicap</label>
                         <div style={{ display: 'flex', gap: '12px' }}>
@@ -117,6 +195,89 @@ export default function RoundSetup() {
                                 75%
                             </button>
                         </div>
+                    </div>
+                )}
+
+                {/* Sindicato points config */}
+                {gameMode === 'sindicato' && (
+                    <div className="mt-4">
+                        <label className="text-sm text-secondary mb-2 block">Puntos por posición en cada hoyo</label>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {players.map((_, idx) => (
+                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <span className="text-xs mb-1">{idx + 1}º</span>
+                                    <input
+                                        type="number"
+                                        value={sindicatoPoints[idx] || 0}
+                                        onChange={(e) => {
+                                            const newPoints = [...sindicatoPoints];
+                                            newPoints[idx] = parseInt(e.target.value) || 0;
+                                            setSindicatoPoints(newPoints);
+                                        }}
+                                        style={{ width: '50px', padding: '8px', textAlign: 'center', borderRadius: '4px', border: '1px solid #ddd' }}
+                                        min={0}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Team mode config */}
+                {gameMode === 'team' && (
+                    <div className="mt-4">
+                        <label className="text-sm text-secondary mb-2 block">Tipo de Juego por Equipos</label>
+                        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                            <button
+                                className={`btn ${teamMode === 'bestBall' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setTeamMode('bestBall')}
+                                style={{ flex: 1 }}
+                            >
+                                Best Ball
+                            </button>
+                            <button
+                                className={`btn ${teamMode === 'goodBadBall' ? 'btn-primary' : 'btn-secondary'}`}
+                                onClick={() => setTeamMode('goodBadBall')}
+                                style={{ flex: 1 }}
+                            >
+                                Good/Bad Ball
+                            </button>
+                        </div>
+
+                        {teamMode === 'bestBall' && (
+                            <p className="text-sm text-secondary">El equipo ganador recibe 1 punto por hoyo</p>
+                        )}
+
+                        {teamMode === 'goodBadBall' && (
+                            <div>
+                                <label className="text-sm text-secondary mb-2 block">Puntos por hoyo</label>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label className="text-xs block mb-1">Mejor Bola</label>
+                                        <input
+                                            type="number"
+                                            value={bestBallPoints}
+                                            onChange={(e) => setBestBallPoints(parseInt(e.target.value) || 0)}
+                                            style={{ width: '100%', padding: '8px', textAlign: 'center', borderRadius: '4px', border: '1px solid #ddd' }}
+                                            min={0}
+                                        />
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <label className="text-xs block mb-1">Peor Bola</label>
+                                        <input
+                                            type="number"
+                                            value={worstBallPoints}
+                                            onChange={(e) => setWorstBallPoints(parseInt(e.target.value) || 0)}
+                                            style={{ width: '100%', padding: '8px', textAlign: 'center', borderRadius: '4px', border: '1px solid #ddd' }}
+                                            min={0}
+                                        />
+                                    </div>
+                                    <div style={{ padding: '0 8px', marginTop: '20px' }}>
+                                        <span className="text-sm text-secondary">Total: {bestBallPoints + worstBallPoints}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -175,6 +336,44 @@ export default function RoundSetup() {
                                 </select>
                             </div>
                         </div>
+
+                        {gameMode === 'team' && (
+                            <div className="mt-4">
+                                <label className="text-sm block mb-1">Equipo</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => updatePlayer(player.id, 'team', 'A')}
+                                        style={{
+                                            flex: 1,
+                                            padding: '10px',
+                                            borderRadius: '6px',
+                                            border: player.team === 'A' ? '2px solid #1976d2' : '1px solid #ccc',
+                                            background: player.team === 'A' ? '#1976d2' : 'white',
+                                            color: player.team === 'A' ? 'white' : '#333',
+                                            fontWeight: player.team === 'A' ? 'bold' : 'normal',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Equipo A (Azul)
+                                    </button>
+                                    <button
+                                        onClick={() => updatePlayer(player.id, 'team', 'B')}
+                                        style={{
+                                            flex: 1,
+                                            padding: '10px',
+                                            borderRadius: '6px',
+                                            border: player.team === 'B' ? '2px solid #d32f2f' : '1px solid #ccc',
+                                            background: player.team === 'B' ? '#d32f2f' : 'white',
+                                            color: player.team === 'B' ? 'white' : '#333',
+                                            fontWeight: player.team === 'B' ? 'bold' : 'normal',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Equipo B (Rojo)
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ))}
 

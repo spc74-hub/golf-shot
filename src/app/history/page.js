@@ -30,7 +30,7 @@ export default function History() {
                     const date = new Date(round.date).toLocaleDateString();
 
                     return (
-                        <Link key={round.id} href={`/history/${round.id}`} className="card" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
+                        <Link key={round.id} href={`/history/detail?id=${round.id}`} className="card" style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}>
                             <h3 className="text-xl mb-2">{round.courseName}</h3>
                             <p className="text-sm mb-4">{date} • {round.players.length} Jugadores</p>
 
