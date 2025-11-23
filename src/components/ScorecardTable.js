@@ -1,591 +1,606 @@
 'use client';
 
+import React from 'react';
 import { getStrokesReceivedForHole, calculateStablefordPoints, calculateSindicatoPoints, calculateTeamPoints } from '@/lib/golf-logic';
 
 export default function ScorecardTable({ round }) {
-    if (!round) return null;
+ if (!round) return null;
 
-    const holes = round.holes;
-    const players = round.players;
-    const courseLength = round.settings?.courseLength || '18';
+ const holes = round.holes;
+ const players = round.players;
+ const courseLength = round.settings?.courseLength || '18';
 
-    // Determine which holes to display based on course length
-    let frontNine, backNine;
+ // Determine which holes to display based on course length
+ let frontNine, backNine;
 
-    if (courseLength === 'front9') {
-        // Only show front 9
-        frontNine = holes;
-        backNine = [];
-    } else if (courseLength === 'back9') {
-        // Only show back 9 - put holes in backNine to show IN column
-        frontNine = [];
-        backNine = holes;
-    } else {
-        // Show both front and back 9
-        frontNine = holes.slice(0, 9);
-        backNine = holes.slice(9, 18);
-    }
+ if (courseLength === 'front9') {
+ // Only show front 9
+ frontNine = holes;
+ backNine = [];
+ } else if (courseLength === 'back9') {
+ // Only show back 9
+ frontNine = [];
+ backNine = holes;
+ } else {
+ // Show both front and back 9
+ frontNine = holes.slice(0, 9);
+ backNine = holes.slice(9, 18);
+ }
 
-    // Helper para formatear números con máximo 1 decimal
-    const formatNumber = (num) => {
-        if (Number.isInteger(num)) return num;
-        return num.toFixed(1);
-    };
+ // Helper para formatear números con máximo 1 decimal
+ const formatNumber = (num) => {
+ if (Number.isInteger(num)) return num;
+ return num.toFixed(1);
+ };
 
-    // Helper to calculate totals (only confirmed holes)
-    const getTotals = (nine, player) => {
-        return nine.reduce((acc, hole) => {
-            if (!round.completedHoles?.includes(hole.number)) return acc;
-            const score = player.scores[hole.number];
-            if (!score) return acc;
+ // Helper to calculate totals (only confirmed holes)
+ const getTotals = (nine, player) => {
+ return nine.reduce((acc, hole) => {
+ if (!round.completedHoles?.includes(hole.number)) return acc;
+ const score = player.scores[hole.number];
+ if (!score) return acc;
 
-            const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
-            const stableford = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
+ const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
+ const stableford = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
 
-            return {
-                strokes: acc.strokes + score.strokes,
-                putts: acc.putts + score.putts,
-                stableford: acc.stableford + stableford
-            };
-        }, { strokes: 0, putts: 0, stableford: 0 });
-    };
+ return {
+ strokes: acc.strokes + score.strokes,
+ putts: acc.putts + score.putts,
+ stableford: acc.stableford + stableford
+ };
+ }, { strokes: 0, putts: 0, stableford: 0 });
+ };
 
-    const getScoreColor = (strokes, par) => {
-        if (!strokes) return 'transparent';
-        const diff = strokes - par;
-        if (diff <= -2) return '#FFD700'; // Eagle (Gold)
-        if (diff === -1) return '#e53935'; // Birdie (Red)
-        if (diff === 0) return '#1e88e5'; // Par (Blue)
-        if (diff === 1) return '#43a047'; // Bogey (Green)
-        if (diff === 2) return '#757575'; // Double Bogey (Grey)
-        return '#212121'; // Triple+ (Black)
-    };
+ const getScoreColor = (strokes, par) => {
+ if (!strokes) return 'transparent';
+ const diff = strokes - par;
+ if (diff <= -2) return '#FFD700'; // Eagle (Gold)
+ if (diff === -1) return '#e53935'; // Birdie (Red)
+ if (diff === 0) return '#1e88e5'; // Par (Blue)
+ if (diff === 1) return '#43a047'; // Bogey (Green)
+ if (diff === 2) return '#757575'; // Double Bogey (Grey)
+ return '#212121'; // Triple+ (Black)
+ };
 
-    const is9Holes = courseLength === 'front9' || courseLength === 'back9';
+ // Render a single table for a set of 9 holes
+ const renderNineTable = (nineHoles, label) => {
+ if (nineHoles.length === 0) return null;
 
-    const renderNine = (nineHoles, label) => (
-        <>
-            {nineHoles.map(hole => (
-                <th key={hole.number} className="p-1 text-center text-xs border-l border-gray-200 min-w-[30px]">
-                    {hole.number}
-                </th>
-            ))}
-            {/* Show OUT for 18 holes and front9, show IN for 18 holes and back9 */}
-            {((courseLength === '18' || (courseLength === 'front9' && label === 'OUT') || (courseLength === 'back9' && label === 'IN')) && nineHoles.length > 0) && (
-                <th className="p-1 text-center text-xs font-bold border-l border-gray-300 bg-gray-100">{label}</th>
-            )}
-        </>
-    );
+ const nineTotals = players.map(p => getTotals(nineHoles, p));
 
-    const renderRow = (label, dataFn, isHeader = false) => (
-        <tr className={isHeader ? "bg-gray-50" : "border-b border-gray-100"}>
-            <td className="p-2 text-sm font-semibold sticky left-0 bg-white border-r border-gray-200 z-10 min-w-[80px]">
-                {label}
-            </td>
-            {/* Front Nine */}
-            {frontNine.map(hole => (
-                <td key={hole.number} className="p-1 text-center text-sm border-l border-gray-200">
-                    {dataFn(hole)}
-                </td>
-            ))}
-            {/* OUT column - show for 18 holes and front9 */}
-            {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                <td className="p-1 text-center text-sm font-bold border-l border-gray-300 bg-gray-50">
-                    {dataFn(null, 'out')}
-                </td>
-            )}
+ return (
+ <div className="overflow-x-auto scorecard-table-wrapper mb-3" style={{
+ maxWidth: '100%',
+ boxShadow: '0 0 10px rgba(0,0,0,0.05)',
+ borderRadius: '8px',
+ WebkitOverflowScrolling: 'touch',
+ overscrollBehavior: 'contain'
+ }}>
+ <style dangerouslySetInnerHTML={{__html: `
+ .scorecard-table-wrapper {
+ border: 2px solid #333;
+ }
+ .scorecard-table-wrapper table {
+ border-spacing: 0;
+ border-collapse: collapse;
+ }
+ .scorecard-table-wrapper td,
+ .scorecard-table-wrapper th {
+ border: none !important;
+ }
+ .scorecard-table-wrapper .total-column {
+ border-left: 2px solid #333 !important;
+ }
+ `}} />
+ <table className="w-full bg-white">
+ <thead>
+ <tr className="bg-gray-100">
+ <th className="p-1 text-left text-xs font-bold sticky left-0 bg-gray-100 z-20" style={{ minWidth: '70px' }}>
+ {label}
+ </th>
+ {nineHoles.map(hole => (
+ <th key={hole.number} className="p-0.5 text-center text-xs min-w-[28px]">
+ {hole.number}
+ </th>
+ ))}
+ <th className="p-0.5 text-center text-xs font-bold bg-gray-100 total-column">
+ {label}
+ </th>
+ </tr>
+ </thead>
+ <tbody>
+ {/* Course Info Rows */}
+ <tr>
+ <td className="p-1 sticky left-0 bg-white z-10" style={{ fontSize: '0.65rem', fontWeight: '600' }}>Metros</td>
+ {nineHoles.map(hole => (
+ <td key={hole.number} className="p-1 text-center" style={{ fontSize: '0.6rem', letterSpacing: '0.3px' }}>{hole.distance}</td>
+ ))}
+ <td className="p-1 text-center font-bold bg-gray-50 total-column" style={{ fontSize: '0.65rem' }}>
+ {nineHoles.reduce((a, h) => a + h.distance, 0)}
+ </td>
+ </tr>
+ <tr>
+ <td className="p-1 text-xs font-semibold sticky left-0 bg-white z-10">Par</td>
+ {nineHoles.map(hole => (
+ <td key={hole.number} className="p-1 text-center text-xs">{hole.par}</td>
+ ))}
+ <td className="p-1 text-center text-xs font-bold bg-gray-50 total-column">
+ {nineHoles.reduce((a, h) => a + h.par, 0)}
+ </td>
+ </tr>
+ <tr>
+ <td className="p-1 text-xs font-semibold sticky left-0 bg-white z-10">Hcp</td>
+ {nineHoles.map(hole => (
+ <td key={hole.number} className="p-1 text-center text-xs">{hole.handicap}</td>
+ ))}
+ <td className="p-1 text-center bg-gray-50 total-column">-</td>
+ </tr>
 
-            {/* Back Nine */}
-            {backNine.map(hole => (
-                <td key={hole.number} className="p-1 text-center text-sm border-l border-gray-200">
-                    {dataFn(hole)}
-                </td>
-            ))}
-            {/* IN column - show for 18 holes and back9 */}
-            {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                <td className="p-1 text-center text-sm font-bold border-l border-gray-300 bg-gray-50">
-                    {dataFn(null, 'in')}
-                </td>
-            )}
+ {/* Players Rows */}
+ {players.map((player, playerIdx) => {
+ const totals = nineTotals[playerIdx];
+ const isTeamMode = round.settings?.gameMode === 'team';
+ const teamColor = isTeamMode && player.team === 'A' ? '#1976d2' : isTeamMode && player.team === 'B' ? '#d32f2f' : 'inherit';
 
-            {/* Total - only for 18 holes */}
-            {courseLength === '18' && (
-                <td className="p-1 text-center text-sm font-bold border-l-2 border-gray-300 bg-gray-100">
-                    {dataFn(null, 'total')}
-                </td>
-            )}
-        </tr>
-    );
+ return (
+ <React.Fragment key={player.id}>
+ {/* Player Name with Handicap Dots */}
+ <tr className="bg-red-50">
+ <td className="p-1 text-xs font-semibold sticky left-0 bg-red-50 z-10">
+ {player.name}
+ <div style={{ fontSize: '0.65rem' }} className="font-normal text-gray-500">Hcp {player.playingHandicap}</div>
+ </td>
+ {nineHoles.map(hole => {
+ const strokes = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
+ const dots = '•'.repeat(strokes);
+ return (
+ <td key={hole.number} className="p-0.5 text-center text-xs" style={{ color: '#d32f2f', fontWeight: 'bold' }}>
+ {dots}
+ </td>
+ );
+ })}
+ <td className="p-0.5 text-center bg-red-100 total-column"></td>
+ </tr>
 
-    return (
-        <div className="overflow-x-auto" style={{
-            maxWidth: '100%',
-            boxShadow: '0 0 10px rgba(0,0,0,0.05)',
-            borderRadius: '8px',
-            WebkitOverflowScrolling: 'touch', // Smooth scrolling en iOS
-            overscrollBehavior: 'contain' // Evita scroll del body cuando llegas al final
-        }}>
-            <table className="w-full border-collapse bg-white" style={{ minWidth: '800px' }}>
-                <thead>
-                    <tr className="bg-gray-100 border-b border-gray-200">
-                        <th className="p-2 text-left text-xs font-bold sticky left-0 bg-gray-100 z-20 border-r border-gray-200" style={{ minWidth: '80px' }}>HOYO</th>
-                        {renderNine(frontNine, 'OUT')}
-                        {backNine.length > 0 && renderNine(backNine, 'IN')}
-                        {courseLength === '18' && <th className="p-2 text-center text-xs font-bold border-l-2 border-gray-300">TOT</th>}
-                    </tr>
-                </thead>
-                <tbody>
-                    {/* Course Info Rows */}
-                    {renderRow('Metros', (hole, type) => {
-                        if (type === 'out') return frontNine.reduce((a, h) => a + h.distance, 0);
-                        if (type === 'in') return backNine.reduce((a, h) => a + h.distance, 0);
-                        if (type === 'total') return round.holes.reduce((a, h) => a + h.distance, 0);
-                        return hole.distance;
-                    })}
-                    {renderRow('Par', (hole, type) => {
-                        if (type === 'out') return frontNine.reduce((a, h) => a + h.par, 0);
-                        if (type === 'in') return backNine.reduce((a, h) => a + h.par, 0);
-                        if (type === 'total') return round.holes.reduce((a, h) => a + h.par, 0);
-                        return hole.par;
-                    })}
-                    {renderRow('Hcp', (hole, type) => {
-                        if (type) return '-';
-                        return hole.handicap;
-                    })}
+ {/* Player Scores */}
+ <tr>
+ <td className="p-1 text-xs font-bold sticky left-0 bg-white z-10">
+ <span style={{ color: teamColor }}>{player.name}</span>
+ </td>
+ {nineHoles.map(hole => {
+ const isConfirmed = round.completedHoles?.includes(hole.number);
+ const score = isConfirmed ? player.scores[hole.number] : null;
+ const bg = score ? getScoreColor(score.strokes, hole.par) : 'transparent';
+ const color = score ? 'white' : 'inherit';
+ const strokes = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
+ const dots = '•'.repeat(strokes);
 
-                    {/* Players Rows */}
-                    {players.map(player => {
-                        const outTotals = getTotals(frontNine, player);
-                        const inTotals = getTotals(backNine, player);
-                        const totalStrokes = outTotals.strokes + inTotals.strokes;
+ return (
+ <td key={hole.number} className="p-0.5 text-center">
+ {score ? (
+ <div style={{ position: 'relative' }}>
+ <div style={{
+ background: bg, color: color,
+ width: '22px', height: '22px',
+ borderRadius: '3px', margin: '0 auto',
+ display: 'flex', alignItems: 'center', justifyContent: 'center',
+ fontSize: '0.75rem', fontWeight: 'bold'
+ }}>
+ {score.strokes}
+ </div>
+ {dots && (
+ <div style={{
+ position: 'absolute',
+ top: '-6px',
+ left: '50%',
+ transform: 'translateX(-50%)',
+ fontSize: '0.55rem',
+ color: '#d32f2f',
+ fontWeight: 'bold',
+ lineHeight: 1
+ }}>
+ {dots}
+ </div>
+ )}
+ </div>
+ ) : '-'}
+ </td>
+ );
+ })}
+ <td className="p-1 text-center font-bold bg-gray-50 total-column">
+ {totals.strokes || '-'}
+ </td>
+ </tr>
 
-                        // Team colors (only for team mode)
-                        const isTeamMode = round.settings?.gameMode === 'team';
-                        const teamColor = isTeamMode && player.team === 'A' ? '#1976d2' : isTeamMode && player.team === 'B' ? '#d32f2f' : 'inherit';
+ {/* Performance vs HDJ Row */}
+ <tr style={{ background: '#fff3e0' }}>
+ <td className="p-1 text-xs sticky left-0 z-10" style={{ background: '#fff3e0', fontSize: '0.65rem' }}>
+ vs HDJ
+ </td>
+ {nineHoles.map(hole => {
+ const isConfirmed = round.completedHoles?.includes(hole.number);
+ if (!isConfirmed) return <td key={hole.number} className="p-0.5 text-center" style={{ fontSize: '0.6rem' }}>-</td>;
 
-                        return (
-                            <tr key={player.id} className="border-b border-gray-200">
-                                <td className="p-2 text-sm font-bold sticky left-0 bg-white border-r border-gray-200 z-10">
-                                    <span style={{ color: teamColor }}>{player.name}</span>
-                                    <div className="text-xs font-normal text-gray-500">Hcp {player.playingHandicap}</div>
-                                </td>
+ const score = player.scores[hole.number];
+ const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
+ const points = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
 
-                                {/* Front Nine Scores */}
-                                {frontNine.map(hole => {
-                                    const isConfirmed = round.completedHoles?.includes(hole.number);
-                                    const score = isConfirmed ? player.scores[hole.number] : null;
-                                    const bg = score ? getScoreColor(score.strokes, hole.par) : 'transparent';
-                                    const color = score ? 'white' : 'inherit';
-                                    return (
-                                        <td key={hole.number} className="p-1 text-center border-l border-gray-200">
-                                            {score ? (
-                                                <div style={{
-                                                    background: bg, color: color,
-                                                    width: '24px', height: '24px',
-                                                    borderRadius: '4px', margin: '0 auto',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '0.85rem', fontWeight: 'bold'
-                                                }}>
-                                                    {score.strokes}
-                                                </div>
-                                            ) : '-'}
-                                        </td>
-                                    );
-                                })}
-                                {/* OUT column - show for 18 holes and front9 */}
-                                {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                                    <td className="p-1 text-center font-bold bg-gray-50 border-l border-gray-300">{outTotals.strokes || '-'}</td>
-                                )}
+ let label = '';
+ let color = '#666';
+ if (points === 0) { label = '2B+'; color = '#212121'; } // Negro - Triple+ bogey
+ else if (points === 1) { label = 'BOG'; color = '#43a047'; } // Verde - Bogey
+ else if (points === 2) { label = 'PAR'; color = '#1e88e5'; } // Azul - Par
+ else if (points === 3) { label = 'BIR'; color = '#e53935'; } // Rojo - Birdie
+ else if (points === 4) { label = 'EAG'; color = '#FFD700'; } // Amarillo dorado - Eagle
+ else if (points > 4) { label = 'ALB'; color = '#FFD700'; } // Amarillo dorado - Albatross
 
-                                {/* Back Nine Scores */}
-                                {backNine.map(hole => {
-                                    const isConfirmed = round.completedHoles?.includes(hole.number);
-                                    const score = isConfirmed ? player.scores[hole.number] : null;
-                                    const bg = score ? getScoreColor(score.strokes, hole.par) : 'transparent';
-                                    const color = score ? 'white' : 'inherit';
-                                    return (
-                                        <td key={hole.number} className="p-1 text-center border-l border-gray-200">
-                                            {score ? (
-                                                <div style={{
-                                                    background: bg, color: color,
-                                                    width: '24px', height: '24px',
-                                                    borderRadius: '4px', margin: '0 auto',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontSize: '0.85rem', fontWeight: 'bold'
-                                                }}>
-                                                    {score.strokes}
-                                                </div>
-                                            ) : '-'}
-                                        </td>
-                                    );
-                                })}
-                                {/* IN column - show for 18 holes and back9 */}
-                                {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                                    <td className="p-1 text-center font-bold bg-gray-50 border-l border-gray-300">{inTotals.strokes || '-'}</td>
-                                )}
+ return (
+ <td key={hole.number} className="p-0.5 text-center" style={{ color, fontWeight: 'bold', fontSize: '0.6rem' }}>
+ {label}
+ </td>
+ );
+ })}
+ <td className="p-1 text-center text-xs font-bold total-column" style={{ background: '#ffe0b2' }}>
+ {(() => {
+ const completedHoles = nineHoles.filter(h => round.completedHoles?.includes(h.number)).length;
+ if (completedHoles === 0) return '-';
+ const expectedPoints = completedHoles * 2;
+ const diff = totals.stableford - expectedPoints;
+ const color = diff > 0 ? '#2e7d32' : diff < 0 ? '#c62828' : '#1976d2';
+ return <span style={{ color }}>{diff > 0 ? '+' : ''}{diff}</span>;
+ })()}
+ </td>
+ </tr>
 
-                                {/* Total - only for 18 holes */}
-                                {courseLength === '18' && (
-                                    <td className="p-1 text-center font-bold bg-gray-100 border-l-2 border-gray-300">{totalStrokes || '-'}</td>
-                                )}
-                            </tr>
-                        );
-                    })}
+ {/* Putts Row */}
+ <tr className="bg-blue-50">
+ <td className="p-1 text-xs sticky left-0 bg-blue-50 z-10">
+ Putts
+ </td>
+ {nineHoles.map(hole => {
+ const isConfirmed = round.completedHoles?.includes(hole.number);
+ const score = isConfirmed ? player.scores[hole.number] : null;
+ return (
+ <td key={hole.number} className="p-1 text-center text-xs">
+ {score?.putts || '-'}
+ </td>
+ );
+ })}
+ <td className="p-1 text-center text-xs font-bold bg-blue-100 total-column">
+ {totals.putts || '-'}
+ </td>
+ </tr>
 
-                    {/* Sindicato Rows */}
-                    {round.settings?.gameMode === 'sindicato' && (
-                        <>
-                            <tr className="bg-gray-100 border-b border-gray-200">
-                                <td className="p-2 text-xs font-bold sticky left-0 bg-gray-100 z-10 border-r border-gray-200">SINDICATO</td>
-                                <td colSpan={21} className="bg-gray-50"></td>
-                            </tr>
-                            {players.map(player => {
-                                // Calculate Sindicato points for all holes
-                                const scoresForCalc = round.holes.map(h => {
-                                    // Only calculate if hole is completed
-                                    if (!round.completedHoles?.includes(h.number)) {
-                                        return { hole: h.number, points: {} };
-                                    }
+ {/* Stableford Row */}
+ <tr className="bg-gray-50">
+ <td className="p-1 text-xs sticky left-0 bg-gray-50 z-10">
+ STB
+ </td>
+ {nineHoles.map(hole => {
+ const isConfirmed = round.completedHoles?.includes(hole.number);
+ if (!isConfirmed) return <td key={hole.number} className="p-1 text-center text-xs">-</td>;
+ const score = player.scores[hole.number];
+ const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
+ const points = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
+ return <td key={hole.number} className="p-1 text-center text-xs">{points}</td>;
+ })}
+ <td className="p-1 text-center text-xs font-bold total-column">
+ {totals.stableford || '-'}
+ </td>
+ </tr>
+ </React.Fragment>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ );
+ };
 
-                                    const pScore = round.players.map(p => {
-                                        const s = p.scores[h.number];
-                                        if (!s) return { playerId: p.id, netScore: 999 }; // No score yet
-                                        const strokesRec = getStrokesReceivedForHole(p.playingHandicap, h.handicap);
-                                        return { playerId: p.id, netScore: s.strokes - strokesRec };
-                                    });
-                                    // Calculate Sindicato points using imported function (with custom distribution)
-                                    return { hole: h.number, points: calculateSindicatoPoints(pScore, players.length, round.settings?.sindicatoPoints) };
-                                });
+ // Helper function to calculate score distribution
+ const getScoreDistribution = (player, useHandicap) => {
+ const distribution = {
+ eagles: 0,       // -2 or better vs par
+ birdies: 0,      // -1 vs par
+ pars: 0,         // 0 vs par
+ bogeys: 0,       // +1 vs par
+ doubleBogeys: 0, // +2 vs par
+ worse: 0         // +3 or worse vs par
+ };
 
-                                const getPlayerPoints = (holeNum) => {
-                                    const holeData = scoresForCalc.find(d => d.hole === holeNum);
-                                    return holeData ? holeData.points[player.id] || 0 : 0;
-                                };
+ round.holes.forEach(hole => {
+ if (!round.completedHoles?.includes(hole.number)) return;
+ const score = player.scores[hole.number];
+ if (!score) return;
 
-                                const outPoints = frontNine.reduce((acc, h) => acc + getPlayerPoints(h.number), 0);
-                                const inPoints = backNine.reduce((acc, h) => acc + getPlayerPoints(h.number), 0);
-                                const totalPoints = outPoints + inPoints;
+ const strokesReceived = useHandicap ? getStrokesReceivedForHole(player.playingHandicap, hole.handicap) : 0;
+ const netScore = score.strokes - strokesReceived;
+ const diff = netScore - hole.par;
 
-                                return (
-                                    <tr key={`sind-${player.id}`} className="border-b border-gray-100 bg-blue-50">
-                                        <td className="p-2 text-xs font-bold sticky left-0 bg-blue-50 border-r border-gray-200 z-10">
-                                            PTS ({player.name})
-                                        </td>
-                                        {frontNine.map(hole => {
-                                            const pts = getPlayerPoints(hole.number);
-                                            return (
-                                                <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200">
-                                                    {pts ? formatNumber(pts) : '-'}
-                                                </td>
-                                            );
-                                        })}
-                                        {/* OUT column - show for 18 holes and front9 */}
-                                        {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                                            <td className="p-1 text-center text-xs font-bold border-l border-gray-300">{formatNumber(outPoints)}</td>
-                                        )}
+ if (diff <= -2) distribution.eagles++;
+ else if (diff === -1) distribution.birdies++;
+ else if (diff === 0) distribution.pars++;
+ else if (diff === 1) distribution.bogeys++;
+ else if (diff === 2) distribution.doubleBogeys++;
+ else distribution.worse++;
+ });
 
-                                        {backNine.map(hole => {
-                                            const pts = getPlayerPoints(hole.number);
-                                            return (
-                                                <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200">
-                                                    {pts ? formatNumber(pts) : '-'}
-                                                </td>
-                                            );
-                                        })}
-                                        {/* IN column - show for 18 holes and back9 */}
-                                        {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                                            <td className="p-1 text-center text-xs font-bold border-l border-gray-300">{formatNumber(inPoints)}</td>
-                                        )}
-                                        {/* Total - only for 18 holes */}
-                                        {courseLength === '18' && (
-                                            <td className="p-1 text-center text-xs font-bold border-l-2 border-gray-300 text-blue-800">{formatNumber(totalPoints)}</td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </>
-                    )}
+ return distribution;
+ };
 
-                    {/* Stableford Row (siempre visible) */}
-                    {players.map(player => {
-                        const outTotals = getTotals(frontNine, player);
-                        const inTotals = getTotals(backNine, player);
-                        return (
-                            <tr key={`stb-${player.id}`} className="border-b border-gray-100 bg-gray-50">
-                                <td className="p-2 text-xs sticky left-0 bg-gray-50 border-r border-gray-200 z-10">
-                                    STB ({player.name})
-                                </td>
-                                {frontNine.map(hole => {
-                                    const isConfirmed = round.completedHoles?.includes(hole.number);
-                                    if (!isConfirmed) return <td key={hole.number} className="border-l border-gray-200">-</td>;
-                                    const score = player.scores[hole.number];
-                                    const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
-                                    const points = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
-                                    return <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200">{points}</td>;
-                                })}
-                                {/* OUT column - show for 18 holes and front9 */}
-                                {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                                    <td className="p-1 text-center text-xs font-bold border-l border-gray-300">{outTotals.stableford || '-'}</td>
-                                )}
+ // Calculate grand totals for classification
+ const playersTotals = players.map(player => {
+ const outTotals = getTotals(frontNine, player);
+ const inTotals = getTotals(backNine, player);
 
-                                {backNine.map(hole => {
-                                    const isConfirmed = round.completedHoles?.includes(hole.number);
-                                    if (!isConfirmed) return <td key={hole.number} className="border-l border-gray-200">-</td>;
-                                    const score = player.scores[hole.number];
-                                    const strokesReceived = getStrokesReceivedForHole(player.playingHandicap, hole.handicap);
-                                    const points = calculateStablefordPoints(score.strokes, hole.par, strokesReceived);
-                                    return <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200">{points}</td>;
-                                })}
-                                {/* IN column - show for 18 holes and back9 */}
-                                {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                                    <td className="p-1 text-center text-xs font-bold border-l border-gray-300">{inTotals.stableford || '-'}</td>
-                                )}
-                                {/* Total - only for 18 holes */}
-                                {courseLength === '18' && (
-                                    <td className="p-1 text-center text-xs font-bold border-l-2 border-gray-300">{(outTotals.stableford + inTotals.stableford) || '-'}</td>
-                                )}
-                            </tr>
-                        );
-                    })}
+ // Calculate Sindicato points if applicable
+ let sindicatoTotal = 0;
+ if (round.settings?.gameMode === 'sindicato') {
+ round.holes.forEach(h => {
+ if (!round.completedHoles?.includes(h.number)) return;
+ const pScore = round.players.map(p => {
+ const s = p.scores[h.number];
+ if (!s) return { playerId: p.id, netScore: 999 };
+ const strokesRec = getStrokesReceivedForHole(p.playingHandicap, h.handicap);
+ return { playerId: p.id, netScore: s.strokes - strokesRec };
+ });
+ const pts = calculateSindicatoPoints(pScore, players.length, round.settings?.sindicatoPoints);
+ sindicatoTotal += pts[player.id] || 0;
+ });
+ }
 
-                    {/* Team Mode Rows */}
-                    {round.settings?.gameMode === 'team' && (() => {
-                        const teamMode = round.settings?.teamMode || 'bestBall';
-                        const pointsConfig = {
-                            bestBallPoints: round.settings?.bestBallPoints || 2,
-                            worstBallPoints: round.settings?.worstBallPoints || 1
-                        };
+ return {
+ ...player,
+ totalStableford: outTotals.stableford + inTotals.stableford,
+ totalStrokes: outTotals.strokes + inTotals.strokes,
+ totalPutts: outTotals.putts + inTotals.putts,
+ totalSindicato: sindicatoTotal,
+ outTotals,
+ inTotals,
+ scratchDistribution: getScoreDistribution(player, false),
+ hdjDistribution: getScoreDistribution(player, true)
+ };
+ });
 
-                        // Calculate team points for each hole
-                        const teamScoresByHole = round.holes.map(h => {
-                            if (!round.completedHoles?.includes(h.number)) {
-                                return { hole: h.number, teamA: 0, teamB: 0, status: '-', winner: null };
-                            }
+ return (
+ <div>
+ {/* Front Nine Table */}
+ {frontNine.length > 0 && renderNineTable(frontNine, courseLength === 'front9' ? 'HOYOS' : 'OUT (1-9)')}
 
-                            const playersData = round.players.map(p => {
-                                const s = p.scores[h.number];
-                                if (!s) return { playerId: p.id, netScore: 999, team: p.team };
-                                const strokesRec = getStrokesReceivedForHole(p.playingHandicap, h.handicap);
-                                return { playerId: p.id, netScore: s.strokes - strokesRec, team: p.team };
-                            });
+ {/* Back Nine Table */}
+ {backNine.length > 0 && renderNineTable(backNine, courseLength === 'back9' ? 'HOYOS' : 'IN (10-18)')}
 
-                            const teamPoints = calculateTeamPoints(playersData, teamMode, pointsConfig);
-                            return { hole: h.number, ...teamPoints };
-                        });
+ {/* Grand Total Summary (only for 18 holes) */}
+ {courseLength === '18' && (
+ <div className="overflow-x-auto scorecard-table-wrapper" style={{
+ maxWidth: '100%',
+ boxShadow: '0 0 10px rgba(0,0,0,0.05)',
+ borderRadius: '8px',
+ WebkitOverflowScrolling: 'touch',
+ overscrollBehavior: 'contain'
+ }}>
+ <style dangerouslySetInnerHTML={{__html: `
+ .scorecard-table-wrapper {
+ border: 2px solid #333;
+ }
+ .scorecard-table-wrapper table {
+ border-spacing: 0;
+ border-collapse: collapse;
+ }
+ .scorecard-table-wrapper td,
+ .scorecard-table-wrapper th {
+ border: none !important;
+ }
+ `}} />
+ <table className="w-full bg-white">
+ <thead>
+ <tr className="bg-gray-800 text-white">
+ <th className="p-2 text-left text-xs font-bold">TOTAL 18 HOYOS</th>
+ <th className="p-2 text-center text-xs font-bold">Golpes</th>
+ <th className="p-2 text-center text-xs font-bold">Putts</th>
+ <th className="p-2 text-center text-xs font-bold">STB</th>
+ <th className="p-2 text-center text-xs font-bold">vs HDJ</th>
+ </tr>
+ </thead>
+ <tbody>
+ {playersTotals.map(player => {
+ const completedHoles = round.holes.filter(h => round.completedHoles?.includes(h.number)).length;
+ const expectedPoints = completedHoles * 2;
+ const diff = player.totalStableford - expectedPoints;
+ const diffColor = diff > 0 ? '#2e7d32' : diff < 0 ? '#c62828' : '#1976d2';
 
-                        const teamAOutPoints = frontNine.reduce((acc, h) => {
-                            const holeData = teamScoresByHole.find(d => d.hole === h.number);
-                            return acc + (holeData ? holeData.teamA : 0);
-                        }, 0);
+ return (
+ <tr key={player.id} className="border-t">
+ <td className="p-2 text-sm font-bold">{player.name}</td>
+ <td className="p-2 text-center text-sm font-bold">{player.totalStrokes || '-'}</td>
+ <td className="p-2 text-center text-sm">{player.totalPutts || '-'}</td>
+ <td className="p-2 text-center text-sm font-bold">{player.totalStableford || '-'}</td>
+ <td className="p-2 text-center text-sm font-bold">
+ <span style={{ color: diffColor }}>
+ {completedHoles > 0 ? (diff > 0 ? '+' : '') + diff : '-'}
+ </span>
+ </td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
 
-                        const teamAInPoints = backNine.reduce((acc, h) => {
-                            const holeData = teamScoresByHole.find(d => d.hole === h.number);
-                            return acc + (holeData ? holeData.teamA : 0);
-                        }, 0);
+ {/* Statistics Section */}
+ <div className="mt-4">
+ {playersTotals.map(player => (
+ <div key={player.id} className="mb-4">
+ <div className="text-sm font-bold mb-2" style={{ color: 'var(--primary)' }}>
+ {player.name} - Estadísticas
+ </div>
 
-                        const teamBOutPoints = frontNine.reduce((acc, h) => {
-                            const holeData = teamScoresByHole.find(d => d.hole === h.number);
-                            return acc + (holeData ? holeData.teamB : 0);
-                        }, 0);
+ {/* Scratch Statistics */}
+ <div className="mb-3 p-3 bg-white rounded-lg border border-gray-300">
+ <div className="text-xs font-semibold mb-2" style={{ color: '#666' }}>
+ Resultado Scratch (sin HDJ)
+ </div>
+ <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#FFD700', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#333' }}>Eagles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.eagles}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#e53935', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Birdies</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.birdies}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#1e88e5', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Pares</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.pars}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#43a047', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Bogeys</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.bogeys}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#757575', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Dobles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.doubleBogeys}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#212121', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>+Dobles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.scratchDistribution.worse}
+ </div>
+ </div>
+ </div>
+ </div>
 
-                        const teamBInPoints = backNine.reduce((acc, h) => {
-                            const holeData = teamScoresByHole.find(d => d.hole === h.number);
-                            return acc + (holeData ? holeData.teamB : 0);
-                        }, 0);
+ {/* HDJ Statistics */}
+ <div className="p-3 bg-white rounded-lg border border-gray-300">
+ <div className="text-xs font-semibold mb-2" style={{ color: '#666' }}>
+ Resultado HDJ (con hándicap)
+ </div>
+ <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#FFD700', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#333' }}>Eagles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.eagles}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#e53935', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Birdies</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.birdies}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#1e88e5', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Pares</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.pars}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#43a047', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Bogeys</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.bogeys}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#757575', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>Dobles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.doubleBogeys}
+ </div>
+ </div>
+ <div style={{ textAlign: 'center', padding: '6px', background: '#212121', borderRadius: '4px' }}>
+ <div style={{ fontSize: '0.65rem', color: '#fff' }}>+Dobles</div>
+ <div style={{ fontSize: '1rem', fontWeight: 'bold', color: 'white' }}>
+ {player.hdjDistribution.worse}
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ )}
 
-                        return (
-                            <>
-                                <tr className="bg-gray-100 border-b border-gray-200">
-                                    <td className="p-2 text-xs font-bold sticky left-0 bg-gray-100 z-10 border-r border-gray-200">EQUIPOS</td>
-                                    <td colSpan={21} className="bg-gray-50"></td>
-                                </tr>
-                                <tr className="border-b border-gray-100" style={{ backgroundColor: '#e3f2fd' }}>
-                                    <td className="p-2 text-xs font-bold sticky left-0 border-r border-gray-200 z-10" style={{ backgroundColor: '#e3f2fd', color: '#1976d2' }}>
-                                        Equipo A (Azul)
-                                    </td>
-                                    {frontNine.map(hole => {
-                                        const holeData = teamScoresByHole.find(d => d.hole === hole.number);
-                                        const winner = holeData?.winner;
-                                        const status = holeData?.status || '-';
-                                        return (
-                                            <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200" style={{ fontWeight: winner === 'A' ? 'bold' : 'normal', color: winner === 'A' ? '#1976d2' : '#666' }}>
-                                                {winner === 'A' ? status : winner === null && status === 'A/S' ? status : ''}
-                                            </td>
-                                        );
-                                    })}
-                                    {/* OUT column - show for 18 holes and front9 */}
-                                    {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                                        <td className="p-1 text-center text-xs border-l border-gray-300"></td>
-                                    )}
+ {/* Clasificación */}
+ {players.length >= 2 && round.settings?.gameMode !== 'team' && (
+ <div className="mt-4 p-4 bg-yellow-50 rounded-lg border-2 border-yellow-200">
+ <div className="text-sm font-bold mb-3">CLASIFICACIÓN</div>
+ <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+ {(() => {
+ const gameMode = round.settings?.gameMode || 'stableford';
+ let sorted, leaderValue, getValue, unit, higherIsBetter;
 
-                                    {backNine.map(hole => {
-                                        const holeData = teamScoresByHole.find(d => d.hole === hole.number);
-                                        const winner = holeData?.winner;
-                                        const status = holeData?.status || '-';
-                                        return (
-                                            <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200" style={{ fontWeight: winner === 'A' ? 'bold' : 'normal', color: winner === 'A' ? '#1976d2' : '#666' }}>
-                                                {winner === 'A' ? status : winner === null && status === 'A/S' ? status : ''}
-                                            </td>
-                                        );
-                                    })}
-                                    {/* IN column - show for 18 holes and back9 */}
-                                    {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                                        <td className="p-1 text-center text-xs border-l border-gray-300"></td>
-                                    )}
-                                    {/* Total - only for 18 holes */}
-                                    {courseLength === '18' && (
-                                        <td className="p-1 text-center text-xs border-l-2 border-gray-300"></td>
-                                    )}
-                                </tr>
-                                <tr className="border-b border-gray-100" style={{ backgroundColor: '#ffebee' }}>
-                                    <td className="p-2 text-xs font-bold sticky left-0 border-r border-gray-200 z-10" style={{ backgroundColor: '#ffebee', color: '#d32f2f' }}>
-                                        Equipo B (Rojo)
-                                    </td>
-                                    {frontNine.map(hole => {
-                                        const holeData = teamScoresByHole.find(d => d.hole === hole.number);
-                                        const winner = holeData?.winner;
-                                        const status = holeData?.status || '-';
-                                        return (
-                                            <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200" style={{ fontWeight: winner === 'B' ? 'bold' : 'normal', color: winner === 'B' ? '#d32f2f' : '#666' }}>
-                                                {winner === 'B' ? status : ''}
-                                            </td>
-                                        );
-                                    })}
-                                    {/* OUT column - show for 18 holes and front9 */}
-                                    {(courseLength === '18' || courseLength === 'front9') && frontNine.length > 0 && (
-                                        <td className="p-1 text-center text-xs border-l border-gray-300"></td>
-                                    )}
+ if (gameMode === 'stroke') {
+ sorted = [...playersTotals].sort((a, b) => a.totalStrokes - b.totalStrokes);
+ leaderValue = sorted[0].totalStrokes;
+ getValue = (p) => p.totalStrokes;
+ unit = ' gps';
+ higherIsBetter = false;
+ } else if (gameMode === 'sindicato') {
+ sorted = [...playersTotals].sort((a, b) => b.totalSindicato - a.totalSindicato);
+ leaderValue = sorted[0].totalSindicato;
+ getValue = (p) => p.totalSindicato;
+ unit = ' pts';
+ higherIsBetter = true;
+ } else {
+ sorted = [...playersTotals].sort((a, b) => b.totalStableford - a.totalStableford);
+ leaderValue = sorted[0].totalStableford;
+ getValue = (p) => p.totalStableford;
+ unit = ' pts';
+ higherIsBetter = true;
+ }
 
-                                    {backNine.map(hole => {
-                                        const holeData = teamScoresByHole.find(d => d.hole === hole.number);
-                                        const winner = holeData?.winner;
-                                        const status = holeData?.status || '-';
-                                        return (
-                                            <td key={hole.number} className="p-1 text-center text-xs border-l border-gray-200" style={{ fontWeight: winner === 'B' ? 'bold' : 'normal', color: winner === 'B' ? '#d32f2f' : '#666' }}>
-                                                {winner === 'B' ? status : ''}
-                                            </td>
-                                        );
-                                    })}
-                                    {/* IN column - show for 18 holes and back9 */}
-                                    {(courseLength === '18' || courseLength === 'back9') && backNine.length > 0 && (
-                                        <td className="p-1 text-center text-xs border-l border-gray-300"></td>
-                                    )}
-                                    {/* Total - only for 18 holes */}
-                                    {courseLength === '18' && (
-                                        <td className="p-1 text-center text-xs border-l-2 border-gray-300"></td>
-                                    )}
-                                </tr>
-                            </>
-                        );
-                    })()}
+ return sorted.map((player, idx) => {
+ const value = getValue(player);
+ const diff = higherIsBetter ? value - leaderValue : value - leaderValue;
 
-                    {/* Clasificación (2+ jugadores, adaptada por modalidad) */}
-                    {players.length >= 2 && (() => {
-                        const gameMode = round.settings?.gameMode || 'stableford';
+ let displayText, textColor;
+ if (idx === 0) {
+ displayText = `${formatNumber(value)}${unit}`;
+ textColor = '#2e7d32';
+ } else if (diff === 0) {
+ displayText = `${formatNumber(value)}${unit}`;
+ textColor = '#000';
+ } else {
+ if (gameMode === 'stableford' || gameMode === 'sindicato') {
+ displayText = `${formatNumber(value)}${unit} (${formatNumber(diff)}${unit})`;
+ } else {
+ displayText = `${formatNumber(diff)}${unit}`;
+ }
+ textColor = '#c62828';
+ }
 
-                        // Para modo equipo, no mostrar clasificación (match play no tiene clasificación acumulada)
-                        if (gameMode === 'team') {
-                            return null;
-                        }
-
-                        // Calcular datos de cada jugador (para otros modos)
-                        const playerScores = players.map(player => {
-                            const outTotals = getTotals(frontNine, player);
-                            const inTotals = getTotals(backNine, player);
-
-                            // Para Sindicato, calcular puntos del sindicato
-                            let sindicatoTotal = 0;
-                            if (gameMode === 'sindicato') {
-                                round.holes.forEach(h => {
-                                    if (!round.completedHoles?.includes(h.number)) return;
-                                    const pScore = round.players.map(p => {
-                                        const s = p.scores[h.number];
-                                        if (!s) return { playerId: p.id, netScore: 999 };
-                                        const strokesRec = getStrokesReceivedForHole(p.playingHandicap, h.handicap);
-                                        return { playerId: p.id, netScore: s.strokes - strokesRec };
-                                    });
-                                    const pts = calculateSindicatoPoints(pScore, players.length, round.settings?.sindicatoPoints);
-                                    sindicatoTotal += pts[player.id] || 0;
-                                });
-                            }
-
-                            return {
-                                ...player,
-                                totalStableford: outTotals.stableford + inTotals.stableford,
-                                totalStrokes: outTotals.strokes + inTotals.strokes,
-                                totalSindicato: sindicatoTotal
-                            };
-                        });
-
-                        // Ordenar según modalidad
-                        let sorted, leaderValue, getValue, unit, higherIsBetter;
-
-                        if (gameMode === 'stroke') {
-                            // Medal: menor golpes = mejor
-                            sorted = [...playerScores].sort((a, b) => a.totalStrokes - b.totalStrokes);
-                            leaderValue = sorted[0].totalStrokes;
-                            getValue = (p) => p.totalStrokes;
-                            unit = ' gps';
-                            higherIsBetter = false;
-                        } else if (gameMode === 'sindicato') {
-                            // Sindicato: mayor puntos sindicato = mejor
-                            sorted = [...playerScores].sort((a, b) => b.totalSindicato - a.totalSindicato);
-                            leaderValue = sorted[0].totalSindicato;
-                            getValue = (p) => p.totalSindicato;
-                            unit = ' pts';
-                            higherIsBetter = true;
-                        } else {
-                            // Stableford: mayor puntos stableford = mejor
-                            sorted = [...playerScores].sort((a, b) => b.totalStableford - a.totalStableford);
-                            leaderValue = sorted[0].totalStableford;
-                            getValue = (p) => p.totalStableford;
-                            unit = ' pts';
-                            higherIsBetter = true;
-                        }
-
-                        return (
-                            <tr className="border-t-2 border-gray-300 bg-yellow-50">
-                                <td colSpan={21} className="p-3">
-                                    <div className="text-xs font-bold mb-2">CLASIFICACIÓN</div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        {sorted.map((player, idx) => {
-                                            const value = getValue(player);
-                                            const diff = higherIsBetter ? value - leaderValue : value - leaderValue;
-
-                                            // Formatear diferencia
-                                            let displayText, textColor;
-                                            if (idx === 0) {
-                                                displayText = `${formatNumber(value)}${unit}`;
-                                                textColor = '#2e7d32';
-                                            } else if (diff === 0) {
-                                                displayText = `${formatNumber(value)}${unit}`;
-                                                textColor = '#000';
-                                            } else {
-                                                // Para Stableford y Sindicato, mostrar total y diferencia en paréntesis
-                                                if (gameMode === 'stableford' || gameMode === 'sindicato') {
-                                                    displayText = `${formatNumber(value)}${unit} (${formatNumber(diff)}${unit})`;
-                                                } else {
-                                                    displayText = `${formatNumber(diff)}${unit}`;
-                                                }
-                                                textColor = '#c62828';
-                                            }
-
-                                            return (
-                                                <div key={player.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: idx === 0 ? '#e8f5e9' : 'white', borderRadius: '4px' }}>
-                                                    <span className="text-sm font-bold">{idx + 1}. {player.name}</span>
-                                                    <span className="text-sm font-bold" style={{ color: textColor }}>
-                                                        {displayText}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </td>
-                            </tr>
-                        );
-                    })()}
-                </tbody>
-            </table>
-        </div>
-    );
+ return (
+ <div key={player.id} style={{
+ display: 'flex',
+ justifyContent: 'space-between',
+ alignItems: 'center',
+ padding: '8px 12px',
+ background: idx === 0 ? '#e8f5e9' : 'white',
+ borderRadius: '6px',
+ border: idx === 0 ? '2px solid #2e7d32' : '1px solid #ddd'
+ }}>
+ <span className="text-sm font-bold">
+ {idx + 1}. {player.name}
+ </span>
+ <span className="text-sm font-bold" style={{ color: textColor }}>
+ {displayText}
+ </span>
+ </div>
+ );
+ });
+ })()}
+ </div>
+ </div>
+ )}
+ </div>
+ );
 }

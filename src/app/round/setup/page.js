@@ -21,7 +21,7 @@ export default function RoundSetup() {
     const [roundDate, setRoundDate] = useState(new Date().toISOString().split('T')[0]); // Fecha de la partida
     const [courseLength, setCourseLength] = useState('18'); // '18', 'front9', 'back9'
     const [players, setPlayers] = useState([
-        { id: 'p1', name: 'Jugador 1', handicapIndex: 18.0, teeBox: null, team: 'A' }
+        { id: 'p1', name: 'Jugador 1', handicapIndex: 18.0, teeBox: null, team: 'A', playingHandicap: null }
     ]);
 
     // Si ya hay partida activa, redirigir al juego
@@ -31,12 +31,20 @@ export default function RoundSetup() {
         }
     }, [currentRound, router]);
 
+    // Calculate Playing Handicap (HDJ)
+    const calculatePlayingHandicap = (handicapIndex, slope) => {
+        return Math.round((handicapIndex * slope) / 113);
+    };
+
     const handleCourseSelect = (course) => {
         setSelectedCourse(course);
         // Set default tee box for first player - Blancas for Las Lomas, Amarillas for others
         const defaultTeeName = course.name === 'Las Lomas Bosque' ? 'Blancas' : 'Amarillas';
         const defaultTee = course.tees.find(t => t.name === defaultTeeName) || course.tees[0];
-        setPlayers(prev => prev.map(p => ({ ...p, teeBox: defaultTee, team: p.team || 'A' })));
+        setPlayers(prev => prev.map(p => {
+            const playingHcp = calculatePlayingHandicap(p.handicapIndex, defaultTee.slope);
+            return { ...p, teeBox: defaultTee, team: p.team || 'A', playingHandicap: playingHcp };
+        }));
         setStep(2);
     };
 
@@ -46,11 +54,27 @@ export default function RoundSetup() {
         const defaultTee = selectedCourse.tees.find(t => t.name === defaultTeeName) || selectedCourse.tees[0];
         // Alternate team assignment by default
         const defaultTeam = players.length % 2 === 0 ? 'A' : 'B';
-        setPlayers([...players, { id: newId, name: `Jugador ${players.length + 1}`, handicapIndex: 24.0, teeBox: defaultTee, team: defaultTeam }]);
+        const playingHcp = calculatePlayingHandicap(24.0, defaultTee.slope);
+        setPlayers([...players, { id: newId, name: `Jugador ${players.length + 1}`, handicapIndex: 24.0, teeBox: defaultTee, team: defaultTeam, playingHandicap: playingHcp }]);
     };
 
     const updatePlayer = (id, field, value) => {
-        setPlayers(players.map(p => p.id === id ? { ...p, [field]: value } : p));
+        setPlayers(players.map(p => {
+            if (p.id !== id) return p;
+
+            const updated = { ...p, [field]: value };
+
+            // Recalculate playing handicap if handicapIndex or teeBox changed
+            if (field === 'handicapIndex' || field === 'teeBox') {
+                const hcpIndex = field === 'handicapIndex' ? value : p.handicapIndex;
+                const tee = field === 'teeBox' ? value : p.teeBox;
+                if (hcpIndex && tee && tee.slope) {
+                    updated.playingHandicap = calculatePlayingHandicap(hcpIndex, tee.slope);
+                }
+            }
+
+            return updated;
+        }));
     };
 
     const handleStart = () => {
@@ -334,6 +358,39 @@ export default function RoundSetup() {
                                         <option key={tee.name} value={tee.name}>{tee.name}</option>
                                     ))}
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* Playing Handicap (HDJ) - Calculated and Editable */}
+                        <div className="mt-4" style={{ background: '#f5f5f5', padding: '12px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <label className="text-sm block" style={{ color: '#333' }}>
+                                    <strong>Handicap de Juego (HDJ)</strong>
+                                </label>
+                                <span className="text-xs" style={{ color: '#666' }}>
+                                    Slope: {player.teeBox?.slope || '-'}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                <input
+                                    type="number"
+                                    value={player.playingHandicap || 0}
+                                    onChange={(e) => updatePlayer(player.id, 'playingHandicap', parseInt(e.target.value) || 0)}
+                                    style={{
+                                        width: '80px',
+                                        padding: '10px',
+                                        borderRadius: '4px',
+                                        border: '2px solid #1976d2',
+                                        background: 'white',
+                                        color: '#333',
+                                        fontSize: '16px',
+                                        fontWeight: 'bold',
+                                        textAlign: 'center'
+                                    }}
+                                />
+                                <span className="text-xs" style={{ color: '#666', flex: 1 }}>
+                                    (Editable - calculado automáticamente)
+                                </span>
                             </div>
                         </div>
 

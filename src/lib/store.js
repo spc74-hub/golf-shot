@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
+import { db } from './firebase';
+import { collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
 const GameContext = createContext();
 
@@ -8,33 +10,64 @@ export function GameProvider({ children }) {
     const [currentRound, setCurrentRound] = useState(null);
     const [history, setHistory] = useState([]);
 
-    // Load from LocalStorage on mount
+    // Load from LocalStorage and Firestore on mount
     useEffect(() => {
-        try {
-            const savedRound = localStorage.getItem('currentRound');
-            const savedHistory = localStorage.getItem('roundHistory');
-
-            if (savedRound) {
-                const parsedRound = JSON.parse(savedRound);
-                // Validation: Check if it has the new 'players' structure
-                if (parsedRound.players && Array.isArray(parsedRound.players)) {
-                    setCurrentRound(parsedRound);
-                } else {
-                    // Old data format detected, clearing to avoid crash
-                    console.warn('Old round data format detected. Clearing current round.');
-                    localStorage.removeItem('currentRound');
+        const loadData = async () => {
+            try {
+                // Load current round from LocalStorage
+                const savedRound = localStorage.getItem('currentRound');
+                if (savedRound) {
+                    const parsedRound = JSON.parse(savedRound);
+                    // Validation: Check if it has the new 'players' structure
+                    if (parsedRound.players && Array.isArray(parsedRound.players)) {
+                        setCurrentRound(parsedRound);
+                    } else {
+                        // Old data format detected, clearing to avoid crash
+                        console.warn('Old round data format detected. Clearing current round.');
+                        localStorage.removeItem('currentRound');
+                    }
                 }
-            }
 
-            if (savedHistory) {
-                const parsedHistory = JSON.parse(savedHistory);
-                // Optional: Filter out old history items if needed, or just keep them
-                // For now, we'll keep history as it might not crash the app immediately unless viewed
-                setHistory(parsedHistory);
+                // Load history from Firestore
+                try {
+                    const roundsQuery = query(
+                        collection(db, 'rounds'),
+                        orderBy('date', 'desc'),
+                        limit(50) // Limit to last 50 rounds
+                    );
+                    const querySnapshot = await getDocs(roundsQuery);
+                    const firestoreHistory = [];
+                    querySnapshot.forEach((doc) => {
+                        firestoreHistory.push({ ...doc.data(), firestoreId: doc.id });
+                    });
+
+                    if (firestoreHistory.length > 0) {
+                        setHistory(firestoreHistory);
+                        // Also save to localStorage as backup
+                        localStorage.setItem('roundHistory', JSON.stringify(firestoreHistory));
+                    } else {
+                        // Fallback to LocalStorage if Firestore is empty
+                        const savedHistory = localStorage.getItem('roundHistory');
+                        if (savedHistory) {
+                            const parsedHistory = JSON.parse(savedHistory);
+                            setHistory(parsedHistory);
+                        }
+                    }
+                } catch (firestoreError) {
+                    console.error('Error loading from Firestore, using localStorage fallback:', firestoreError);
+                    // Fallback to LocalStorage if Firestore fails
+                    const savedHistory = localStorage.getItem('roundHistory');
+                    if (savedHistory) {
+                        const parsedHistory = JSON.parse(savedHistory);
+                        setHistory(parsedHistory);
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading data:', e);
             }
-        } catch (e) {
-            console.error('Error loading from localStorage:', e);
-        }
+        };
+
+        loadData();
     }, []);
 
     // Save to LocalStorage on change
@@ -66,19 +99,14 @@ export function GameProvider({ children }) {
         }
 
         const playersWithHandicap = players.map(p => {
-            // Calculate playing handicap for each player
-            let playingHandicap = 0;
+            // Use the playing handicap calculated in setup (already includes slope)
+            // Apply handicap percentage if needed
+            let playingHandicap = p.playingHandicap || 0;
 
-            if (useHandicap) {
-                // Formula: (HcpIndex * (Slope/113)) + (Rating - Par)
-                playingHandicap = Math.round(
-                    (p.handicapIndex * (p.teeBox.slope / 113)) + (p.teeBox.rating - course.par)
-                );
-
-                // Apply handicap percentage
-                if (handicapPercentage !== 100) {
-                    playingHandicap = Math.round(playingHandicap * (handicapPercentage / 100));
-                }
+            if (useHandicap && handicapPercentage !== 100) {
+                playingHandicap = Math.round(playingHandicap * (handicapPercentage / 100));
+            } else if (!useHandicap) {
+                playingHandicap = 0;
             }
 
             // Pre-llenar scores con valores por defecto solo para los hoyos seleccionados
@@ -157,18 +185,195 @@ export function GameProvider({ children }) {
         });
     };
 
-    const finishRound = () => {
+    const saveProgress = async () => {
         if (!currentRound) return;
-        setHistory(prev => [currentRound, ...prev]);
-        setCurrentRound(null);
+
+        try {
+            const roundData = {
+                ...currentRound,
+                isFinished: false,
+                lastSaved: new Date().toISOString()
+            };
+
+            let firestoreId = currentRound.firestoreId;
+
+            // If already has a firestoreId, update the existing document
+            if (firestoreId) {
+                const { updateDoc, doc } = await import('firebase/firestore');
+                await updateDoc(doc(db, 'rounds', firestoreId), roundData);
+                console.log('Progress updated in Firestore with ID:', firestoreId);
+            } else {
+                // Otherwise, create a new document
+                const docRef = await addDoc(collection(db, 'rounds'), roundData);
+                firestoreId = docRef.id;
+                console.log('Progress saved to Firestore with new ID:', firestoreId);
+            }
+
+            // Update currentRound with firestoreId
+            setCurrentRound({
+                ...currentRound,
+                firestoreId,
+                lastSaved: new Date().toISOString()
+            });
+
+            // Update or add to history
+            const roundWithFirestoreId = {
+                ...currentRound,
+                firestoreId,
+                isFinished: false,
+                lastSaved: new Date().toISOString()
+            };
+
+            setHistory(prev => {
+                // Check if this round already exists in history
+                const existingIndex = prev.findIndex(r => r.firestoreId === firestoreId);
+                if (existingIndex !== -1) {
+                    // Update existing entry
+                    const updated = [...prev];
+                    updated[existingIndex] = roundWithFirestoreId;
+                    return updated;
+                } else {
+                    // Add new entry
+                    return [roundWithFirestoreId, ...prev];
+                }
+            });
+
+            alert('Progreso guardado correctamente');
+
+        } catch (error) {
+            console.error('Error saving progress to Firestore:', error);
+            alert('Error al guardar progreso');
+        }
+    };
+
+    const finishRound = async () => {
+        if (!currentRound) return;
+
+        try {
+            const roundData = {
+                ...currentRound,
+                isFinished: true,
+                completedAt: new Date().toISOString()
+            };
+
+            let firestoreId = currentRound.firestoreId;
+
+            // If already has a firestoreId, update the existing document
+            if (firestoreId) {
+                const { updateDoc, doc } = await import('firebase/firestore');
+                await updateDoc(doc(db, 'rounds', firestoreId), roundData);
+                console.log('Round finished and updated in Firestore with ID:', firestoreId);
+            } else {
+                // Otherwise, create a new document
+                const docRef = await addDoc(collection(db, 'rounds'), roundData);
+                firestoreId = docRef.id;
+                console.log('Round saved to Firestore with new ID:', firestoreId);
+            }
+
+            // Update or add to history
+            const roundWithFirestoreId = {
+                ...currentRound,
+                firestoreId,
+                isFinished: true,
+                completedAt: new Date().toISOString()
+            };
+
+            setHistory(prev => {
+                // Check if this round already exists in history
+                const existingIndex = prev.findIndex(r => r.firestoreId === firestoreId);
+                if (existingIndex !== -1) {
+                    // Update existing entry
+                    const updated = [...prev];
+                    updated[existingIndex] = roundWithFirestoreId;
+                    return updated;
+                } else {
+                    // Add new entry
+                    return [roundWithFirestoreId, ...prev];
+                }
+            });
+            setCurrentRound(null);
+
+        } catch (error) {
+            console.error('Error saving to Firestore, saving to localStorage only:', error);
+            // Fallback to localStorage only if Firestore fails
+            const finishedRound = { ...currentRound, isFinished: true, completedAt: new Date().toISOString() };
+            setHistory(prev => [finishedRound, ...prev]);
+            setCurrentRound(null);
+        }
     };
 
     const abandonRound = () => {
         setCurrentRound(null);
     };
 
+    const deleteRound = async (roundId, firestoreId) => {
+        try {
+            // Delete from Firestore if it has a firestoreId
+            if (firestoreId) {
+                const { deleteDoc, doc } = await import('firebase/firestore');
+                await deleteDoc(doc(db, 'rounds', firestoreId));
+                console.log('Round deleted from Firestore');
+            }
+
+            // Remove from local history - use firestoreId if available to avoid deleting wrong entry
+            setHistory(prev => prev.filter(r => {
+                // If both have firestoreId, compare by firestoreId (more accurate)
+                if (r.firestoreId && firestoreId) {
+                    return r.firestoreId !== firestoreId;
+                }
+                // Otherwise, fallback to id comparison
+                return r.id !== roundId;
+            }));
+            alert('Partida eliminada correctamente');
+        } catch (error) {
+            console.error('Error deleting round:', error);
+            alert('Error al eliminar la partida');
+        }
+    };
+
+    const continueRound = (round) => {
+        // Resume a saved round
+        setCurrentRound(round);
+        // Remove from history since it's now active - use firestoreId for accuracy
+        setHistory(prev => prev.filter(r => {
+            if (r.firestoreId && round.firestoreId) {
+                return r.firestoreId !== round.firestoreId;
+            }
+            return r.id !== round.id;
+        }));
+    };
+
+    const reopenFinishedRound = (round) => {
+        // Reopen a finished round for editing
+        const reopenedRound = {
+            ...round,
+            isFinished: false
+        };
+        setCurrentRound(reopenedRound);
+        // Remove from history since it's now active - use firestoreId for accuracy
+        setHistory(prev => prev.filter(r => {
+            if (r.firestoreId && round.firestoreId) {
+                return r.firestoreId !== round.firestoreId;
+            }
+            return r.id !== round.id;
+        }));
+    };
+
     return (
-        <GameContext.Provider value={{ currentRound, startRound, updateScore, finishRound, confirmHole, reopenHole, abandonRound, history }}>
+        <GameContext.Provider value={{
+            currentRound,
+            startRound,
+            updateScore,
+            finishRound,
+            saveProgress,
+            confirmHole,
+            reopenHole,
+            abandonRound,
+            deleteRound,
+            continueRound,
+            reopenFinishedRound,
+            history
+        }}>
             {children}
         </GameContext.Provider>
     );
