@@ -7,7 +7,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 function HomePage() {
   const { currentRound, abandonRound } = useGame();
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   const handleLogout = async () => {
     if (confirm('¿Cerrar sesión?')) {
@@ -108,6 +108,34 @@ function HomePage() {
           </Link>
         </div>
       </div>
+
+      {/* Admin Panel Link - Only for admins */}
+      {isAdmin && (
+        <div className="card" style={{ marginTop: '16px', background: '#fff3e0', border: '2px solid #ff9800' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h3 style={{ marginBottom: '4px', color: '#ff9800' }}>Panel de Administración</h3>
+              <p style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>
+                Gestiona usuarios y campos de golf
+              </p>
+            </div>
+            <Link
+              href="/admin"
+              style={{
+                padding: '10px 20px',
+                background: '#ff9800',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '8px',
+                fontWeight: '600',
+                fontSize: '0.9rem'
+              }}
+            >
+              Ir al Admin →
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

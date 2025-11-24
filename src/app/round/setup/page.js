@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/lib/store';
 import { MOCK_COURSES } from '@/lib/mock-data';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 export default function RoundSetup() {
     const router = useRouter();
     const { startRound, currentRound } = useGame();
+    const [courses, setCourses] = useState([]);
+    const [coursesLoading, setCoursesLoading] = useState(true);
 
     const [step, setStep] = useState(1);
     const [selectedCourse, setSelectedCourse] = useState(null);
@@ -23,6 +27,33 @@ export default function RoundSetup() {
     const [players, setPlayers] = useState([
         { id: 'p1', name: 'Jugador 1', handicapIndex: 18.0, teeBox: null, team: 'A', playingHandicap: null }
     ]);
+
+    // Load courses from Firestore
+    useEffect(() => {
+        loadCourses();
+    }, []);
+
+    const loadCourses = async () => {
+        try {
+            const coursesSnapshot = await getDocs(collection(db, 'courses'));
+            if (coursesSnapshot.empty) {
+                // If no courses in Firestore, use mock data
+                setCourses(MOCK_COURSES);
+            } else {
+                const coursesData = coursesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setCourses(coursesData);
+            }
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            // Fallback to mock data on error
+            setCourses(MOCK_COURSES);
+        } finally {
+            setCoursesLoading(false);
+        }
+    };
 
     // Si ya hay partida activa, redirigir al juego
     useEffect(() => {
@@ -95,14 +126,25 @@ export default function RoundSetup() {
         return (
             <div>
                 <h1 className="mb-8">Selecciona Campo</h1>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {MOCK_COURSES.map(course => (
-                        <div key={course.id} className="card" onClick={() => handleCourseSelect(course)} style={{ cursor: 'pointer' }}>
-                            <h3 className="text-xl mb-2">{course.name}</h3>
-                            <p className="text-sm">{course.holes} Hoyos • Par {course.par}</p>
-                        </div>
-                    ))}
-                </div>
+                {coursesLoading ? (
+                    <div style={{ textAlign: 'center', padding: '40px' }}>Cargando campos...</div>
+                ) : courses.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                        <p>No hay campos disponibles.</p>
+                        <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>
+                            Contacta con el administrador para añadir campos.
+                        </p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {courses.map(course => (
+                            <div key={course.id} className="card" onClick={() => handleCourseSelect(course)} style={{ cursor: 'pointer' }}>
+                                <h3 className="text-xl mb-2">{course.name}</h3>
+                                <p className="text-sm">{course.holes} Hoyos • Par {course.par}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }

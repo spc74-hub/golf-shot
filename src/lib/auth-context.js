@@ -9,18 +9,35 @@ import {
     onAuthStateChanged,
     updateProfile
 } from 'firebase/auth';
-import app from './firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import app, { db } from './firebase';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
     const auth = getAuth(app);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setUser(user);
+
+            // Check if user is admin
+            if (user) {
+                try {
+                    const userDocRef = doc(db, 'users', user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    setIsAdmin(userDoc.exists() && userDoc.data()?.role === 'admin');
+                } catch (error) {
+                    console.error('Error checking admin status:', error);
+                    setIsAdmin(false);
+                }
+            } else {
+                setIsAdmin(false);
+            }
+
             setLoading(false);
         });
 
@@ -35,6 +52,17 @@ export function AuthProvider({ children }) {
             if (displayName) {
                 await updateProfile(userCredential.user, { displayName });
             }
+
+            // Create user document in Firestore
+            const userDocRef = doc(db, 'users', userCredential.user.uid);
+            await setDoc(userDocRef, {
+                email: userCredential.user.email,
+                displayName: displayName || null,
+                role: 'user',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
 
             return { success: true, user: userCredential.user };
         } catch (error) {
@@ -85,6 +113,7 @@ export function AuthProvider({ children }) {
 
     const value = {
         user,
+        isAdmin,
         loading,
         register,
         login,

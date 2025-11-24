@@ -12,8 +12,45 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
 
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if isSignedIn() && isOwner(userId);
+
+      // Allow admins to read all users
+      allow read: if isAdmin();
+
+      // Allow creating user document on registration
+      allow create: if isSignedIn() && isOwner(userId);
+
+      // Allow admins to update any user
+      allow update: if isAdmin();
+
+      // Allow admins to delete users
+      allow delete: if isAdmin();
+    }
+
+    // Courses collection
+    match /courses/{courseId} {
+      // Allow all authenticated users to read courses
+      allow read: if isSignedIn();
+
+      // Only admins can create, update, or delete courses
+      allow create, update, delete: if isAdmin();
+    }
+
     // Rounds collection
     match /rounds/{roundId} {
+      // Allow admins to read all rounds (for statistics and management)
+      allow read: if isAdmin();
+
       // Allow read if user is authenticated and owns the document
       allow read: if isSignedIn() && isOwner(resource.data.userId);
 
@@ -21,13 +58,15 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
       // Allow update if user is authenticated and owns the document
-      // and doesn't try to change the userId
-      allow update: if isSignedIn()
-                    && isOwner(resource.data.userId)
-                    && request.resource.data.userId == resource.data.userId;
+      allow update: if isSignedIn() &&
+                      resource.data.userId == request.auth.uid &&
+                      request.resource.data.userId == request.auth.uid;
 
       // Allow delete if user is authenticated and owns the document
       allow delete: if isSignedIn() && isOwner(resource.data.userId);
+
+      // Allow admins to delete any round (when deleting users)
+      allow delete: if isAdmin();
     }
 
     // Deny all other access by default
