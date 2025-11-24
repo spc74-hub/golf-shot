@@ -1,11 +1,14 @@
 'use client';
 
 import { GameProvider } from '@/lib/store';
+import { AuthProvider } from '@/lib/auth-context';
 
 export function Providers({ children }) {
     return (
-        <GameProvider>
-            {children}
-        </GameProvider>
+        <AuthProvider>
+            <GameProvider>
+                {children}
+            </GameProvider>
+        </AuthProvider>
     );
 }

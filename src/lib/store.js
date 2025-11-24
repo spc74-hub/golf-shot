@@ -2,29 +2,38 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './firebase';
-import { collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { useAuth } from './auth-context';
 
 const GameContext = createContext();
 
 export function GameProvider({ children }) {
     const [currentRound, setCurrentRound] = useState(null);
     const [history, setHistory] = useState([]);
+    const { user } = useAuth();
 
     // Load from LocalStorage and Firestore on mount
     useEffect(() => {
         const loadData = async () => {
+            if (!user) {
+                // Clear data if not logged in
+                setCurrentRound(null);
+                setHistory([]);
+                return;
+            }
+
             try {
                 // Load current round from LocalStorage
-                const savedRound = localStorage.getItem('currentRound');
+                const savedRound = localStorage.getItem(`currentRound_${user.uid}`);
                 if (savedRound) {
                     const parsedRound = JSON.parse(savedRound);
-                    // Validation: Check if it has the new 'players' structure
-                    if (parsedRound.players && Array.isArray(parsedRound.players)) {
+                    // Validation: Check if it has the new 'players' structure and belongs to current user
+                    if (parsedRound.players && Array.isArray(parsedRound.players) && parsedRound.userId === user.uid) {
                         setCurrentRound(parsedRound);
                     } else {
-                        // Old data format detected, clearing to avoid crash
-                        console.warn('Old round data format detected. Clearing current round.');
-                        localStorage.removeItem('currentRound');
+                        // Old data format detected or different user, clearing to avoid crash
+                        console.warn('Old round data format or different user detected. Clearing current round.');
+                        localStorage.removeItem(`currentRound_${user.uid}`);
                     }
                 }
 
@@ -32,6 +41,7 @@ export function GameProvider({ children }) {
                 try {
                     const roundsQuery = query(
                         collection(db, 'rounds'),
+                        where('userId', '==', user.uid),
                         orderBy('date', 'desc'),
                         limit(50) // Limit to last 50 rounds
                     );
@@ -44,10 +54,10 @@ export function GameProvider({ children }) {
                     if (firestoreHistory.length > 0) {
                         setHistory(firestoreHistory);
                         // Also save to localStorage as backup
-                        localStorage.setItem('roundHistory', JSON.stringify(firestoreHistory));
+                        localStorage.setItem(`roundHistory_${user.uid}`, JSON.stringify(firestoreHistory));
                     } else {
                         // Fallback to LocalStorage if Firestore is empty
-                        const savedHistory = localStorage.getItem('roundHistory');
+                        const savedHistory = localStorage.getItem(`roundHistory_${user.uid}`);
                         if (savedHistory) {
                             const parsedHistory = JSON.parse(savedHistory);
                             setHistory(parsedHistory);
@@ -56,7 +66,7 @@ export function GameProvider({ children }) {
                 } catch (firestoreError) {
                     console.error('Error loading from Firestore, using localStorage fallback:', firestoreError);
                     // Fallback to LocalStorage if Firestore fails
-                    const savedHistory = localStorage.getItem('roundHistory');
+                    const savedHistory = localStorage.getItem(`roundHistory_${user.uid}`);
                     if (savedHistory) {
                         const parsedHistory = JSON.parse(savedHistory);
                         setHistory(parsedHistory);
@@ -68,20 +78,24 @@ export function GameProvider({ children }) {
         };
 
         loadData();
-    }, []);
+    }, [user]);
 
     // Save to LocalStorage on change
     useEffect(() => {
+        if (!user) return;
+
         if (currentRound) {
-            localStorage.setItem('currentRound', JSON.stringify(currentRound));
+            localStorage.setItem(`currentRound_${user.uid}`, JSON.stringify(currentRound));
         } else {
-            localStorage.removeItem('currentRound');
+            localStorage.removeItem(`currentRound_${user.uid}`);
         }
-    }, [currentRound]);
+    }, [currentRound, user]);
 
     useEffect(() => {
-        localStorage.setItem('roundHistory', JSON.stringify(history));
-    }, [history]);
+        if (!user) return;
+
+        localStorage.setItem(`roundHistory_${user.uid}`, JSON.stringify(history));
+    }, [history, user]);
 
     const startRound = (course, players, settings = {}) => {
         const { gameMode = 'stableford', useHandicap = true, handicapPercentage = 100, roundDate, courseLength = '18' } = settings;
@@ -124,6 +138,7 @@ export function GameProvider({ children }) {
 
         const newRound = {
             id: Date.now().toString(),
+            userId: user?.uid || null, // Add userId to the round
             date: roundDate || new Date().toISOString().split('T')[0],
             courseId: course.id,
             courseName: course.name,

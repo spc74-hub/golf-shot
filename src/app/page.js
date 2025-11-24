@@ -2,9 +2,18 @@
 
 import Link from 'next/link';
 import { useGame } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
-export default function Home() {
+function HomePage() {
   const { currentRound, abandonRound } = useGame();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    if (confirm('¿Cerrar sesión?')) {
+      await logout();
+    }
+  };
 
   const handleNewRound = () => {
     if (currentRound) {
@@ -19,8 +28,32 @@ export default function Home() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'center' }}>
+      {/* User Header with Logout */}
+      <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '0.75rem', color: '#666' }}>Hola,</div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+            {user?.displayName || user?.email}
+          </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: '8px 16px',
+            background: '#f5f5f5',
+            border: '1px solid #ddd',
+            borderRadius: '6px',
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            color: '#666'
+          }}
+        >
+          Salir
+        </button>
+      </div>
+
       <div className="text-center mb-8">
-        <h1 className="text-xl mb-4">Golf Tracker</h1>
+        <h1 className="text-xl mb-4">⛳ Golf Shot</h1>
         <p className="text-sm">Tu caddie digital personal</p>
       </div>
 
@@ -76,5 +109,13 @@ export default function Home() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <ProtectedRoute>
+      <HomePage />
+    </ProtectedRoute>
   );
 }
